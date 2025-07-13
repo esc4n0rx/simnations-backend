@@ -70,37 +70,3 @@ CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column();
-
--- RLS (Row Level Security) - Opcional para maior segurança
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quiz_results ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_states ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quiz_answers ENABLE ROW LEVEL SECURITY;
-
--- Políticas RLS básicas (usuário só acessa seus próprios dados)
-CREATE POLICY "Users can view own data" ON users
-    FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Users can update own data" ON users
-    FOR UPDATE USING (auth.uid() = id);
-
-CREATE POLICY "Users can view own quiz results" ON quiz_results
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own quiz results" ON quiz_results
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can view own states" ON user_states
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own states" ON user_states
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own states" ON user_states
-    FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can view own quiz answers" ON quiz_answers
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own quiz answers" ON quiz_answers
-    FOR INSERT WITH CHECK (auth.uid() = user_id);

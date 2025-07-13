@@ -1,11 +1,14 @@
 const StateRepository = require('../../domain/repositories/state-repository');
 const QuizRepository = require('../../domain/repositories/quiz-repository');
+const StateParameterRepository = require('../../domain/repositories/state-parameter-repository'); // [NOVO]
 const { RELOAD_EFFECTS, COUP_RISK_LEVELS, PROTEST_LEVELS } = require('../../shared/constants/state-constants');
+const { ECONOMIC_CONSTANTS } = require('../../shared/constants/economic-constants'); // [NOVO]
 
 class StateService {
     constructor() {
         this.stateRepository = new StateRepository();
         this.quizRepository = new QuizRepository();
+        this.parameterRepository = new StateParameterRepository(); // [NOVO]
     }
 
     /**
@@ -79,11 +82,38 @@ class StateService {
 
         const governance = await this.stateRepository.createStateGovernance(governanceData);
 
+        // [NOVO] Criar parâmetros econômicos padrão
+        await this.createDefaultStateParameters(userId, stateId, governance);
+
         return {
             economy: economy.toObject(),
             governance: governance.toObject(),
             summary: this.generateStateSummary(economy, governance)
         };
+    }
+
+    /**
+     * [NOVO] Criar parâmetros econômicos padrão para um estado
+     * @param {string} userId - ID do usuário
+     * @param {string} stateId - ID do estado
+     * @param {StateGovernance} governance - Dados de governança
+     * @returns {Promise<StateParameter>} - Parâmetros criados
+     */
+    async createDefaultStateParameters(userId, stateId, governance) {
+        const parameterData = {
+            user_id: userId,
+            state_id: stateId,
+            tax_rate: ECONOMIC_CONSTANTS.DEFAULT_TAX_RATE,
+            administrative_efficiency: ECONOMIC_CONSTANTS.DEFAULT_ADMINISTRATIVE_EFFICIENCY,
+            expense_ratio: ECONOMIC_CONSTANTS.DEFAULT_EXPENSE_RATIO,
+            expense_efficiency: ECONOMIC_CONSTANTS.DEFAULT_EXPENSE_EFFICIENCY,
+            corruption_impact: governance ? (governance.corruption_index / 1000) : ECONOMIC_CONSTANTS.DEFAULT_CORRUPTION_IMPACT,
+            special_modifiers: {},
+            max_treasury_growth_per_day: null,
+            min_treasury_balance: 0.00
+        };
+
+        return await this.parameterRepository.create(parameterData);
     }
 
     /**
@@ -185,6 +215,9 @@ class StateService {
 
         return updatedGovernance.toObject();
     }
+
+    // [MANTIDAS] Todas as outras funções existentes permanecem inalteradas...
+    // generateStateSummary, generateStateAnalysis, calculateCoupRisk, etc.
 
     /**
      * Gerar resumo do estado

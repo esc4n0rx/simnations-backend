@@ -187,6 +187,22 @@ Authorization: Bearer <seu_token_jwt>
 | PUT | `/state/economy` | Atualizar dados econômicos | Privado |
 | PUT | `/state/governance` | Atualizar dados de governança | Privado |
 
+#### Sistema Econômico (v1.2.0)
+
+| Método | Endpoint | Descrição | Acesso |
+|--------|----------|-----------|--------|
+| GET | `/state/economic-logs` | Obter logs de atualizações econômicas | Privado |
+| GET | `/state/parameters` | Obter parâmetros econômicos do estado | Privado |
+| POST | `/state/force-economic-update` | Forçar atualização econômica manual | Privado |
+| GET | `/state/economic-stats` | Obter estatísticas do sistema econômico | Privado |
+
+#### Administrativo (v1.2.0)
+
+| Método | Endpoint | Descrição | Acesso |
+|--------|----------|-----------|--------|
+| GET | `/admin/economic-job/status` | Status da job econômica | Admin |
+| POST | `/admin/economic-job/execute` | Executar job manualmente (dev) | Admin |
+
 ### Exemplos de Uso
 
 #### Registrar usuário
@@ -247,6 +263,28 @@ curl -X PUT http://localhost:3000/api/state/economy \
 ```bash
 curl -X GET http://localhost:3000/api/state/analysis \
   -H "Authorization: Bearer <seu_token>"
+```
+
+#### Obter logs econômicos
+```bash
+curl -X GET http://localhost:3000/api/state/economic-logs?limit=10 \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Forçar atualização econômica
+```bash
+curl -X POST http://localhost:3000/api/state/force-economic-update \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Verificar status da job econômica
+```bash
+curl -X GET http://localhost:3000/admin/economic-job/status
+```
+
+#### Executar job manualmente (desenvolvimento)
+```bash
+curl -X POST http://localhost:3000/admin/economic-job/execute
 ```
 
 ## Segurança
@@ -322,6 +360,15 @@ O sistema fornece:
 - **Recomendações**: Sugestões de políticas e ações
 - **Resumo Executivo**: Visão geral para tomada de decisões
 
+### ⚙️ Motor Econômico (v1.2.0)
+O sistema agora inclui:
+- **Atualização Automática**: Job diária que processa todos os estados
+- **Parâmetros Econômicos**: Taxas, eficiência e modificadores por estado
+- **Logs de Auditoria**: Rastreamento completo de mudanças econômicas
+- **Validação de Integridade**: Verificação automática de dados
+- **Processamento em Lote**: Atualização eficiente de múltiplos estados
+- **Controle de Corrupção**: Impacto da corrupção na economia
+
 ## Deploy
 
 ### Variáveis de Ambiente para Produção
@@ -337,6 +384,11 @@ JWT_EXPIRES_IN=24h
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 FRONTEND_URL=https://seu-frontend.com
+
+# Configurações do Motor Econômico (v1.2.0)
+ECONOMIC_JOB_SCHEDULE=0 6 * * *  # Diariamente às 6h
+ECONOMIC_JOB_TIMEZONE=America/Sao_Paulo
+ECONOMIC_LOG_RETENTION_DAYS=90
 ```
 
 ### Docker (Opcional)
@@ -349,6 +401,16 @@ RUN npm ci --only=production
 COPY . .
 EXPOSE 3000
 CMD ["npm", "start"]
+```
+
+### Dependências Adicionais (v1.2.0)
+
+```bash
+# Instalar node-cron para jobs agendadas
+npm install node-cron
+
+# Verificar se todas as dependências estão instaladas
+npm install
 ```
 
 ## 🤝 Contribuição
@@ -376,7 +438,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - Supabase pela infraestrutura
 - Todos os contribuidores
 
-## 📈 Novas Features (v1.1.0)
+## 📈 Novas Features (v1.2.0)
 
 ### 🏛️ Sistema de Estados
 - **Gerenciamento Completo**: Economia e governança integradas
@@ -395,6 +457,30 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - **Validação Inteligente**: Schemas de validação para todas as operações
 - **Logs Detalhados**: Rastreamento completo de mudanças
 - **API RESTful**: Endpoints organizados e documentados
+
+### ⚙️ Motor Econômico Automatizado
+- **Job Agendada**: Atualização econômica diária automática às 6h
+- **Processamento em Lote**: Atualização de todos os estados ativos
+- **Logs de Auditoria**: Rastreamento completo de mudanças econômicas
+- **Validação de Integridade**: Verificação automática de dados
+
+### 📈 Sistema de Parâmetros Econômicos
+- **Taxas Personalizadas**: Taxa de impostos configurável por estado
+- **Eficiência Administrativa**: Impacto da gestão na arrecadação
+- **Controle de Gastos**: Taxa de despesas e eficiência
+- **Impacto da Corrupção**: Redução de receitas e aumento de despesas
+
+### 🔍 Monitoramento Avançado
+- **Logs Econômicos**: Histórico completo de atualizações
+- **Estatísticas do Sistema**: Métricas de performance do motor econômico
+- **Atualização Manual**: Forçar atualização para usuários específicos
+- **Status da Job**: Monitoramento em tempo real da execução
+
+### 🛠️ Ferramentas Administrativas
+- **Endpoints de Admin**: Rotas para monitoramento e controle
+- **Execução Manual**: Trigger manual da job econômica (desenvolvimento)
+- **Status da Job**: Verificação do estado da atualização automática
+- **Logs Detalhados**: Auditoria completa de todas as operações
 
 ---
 
