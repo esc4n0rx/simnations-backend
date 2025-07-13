@@ -1,11 +1,13 @@
 const fs = require('fs').promises;
 const path = require('path');
 const QuizRepository = require('../../domain/repositories/quiz-repository');
+const StateService = require('./state-service');
 const { QUIZ_QUESTIONS, QUIZ_CATEGORIES, SCORE_MAPPING, MAX_RELOAD_COUNT } = require('../../shared/constants/quiz-constants');
 
 class QuizService {
     constructor() {
         this.quizRepository = new QuizRepository();
+        this.stateService = new StateService();
         this.statesData = null;
     }
 
@@ -133,9 +135,18 @@ class QuizService {
         // Sortear estado baseado nas pontuações
         const assignedState = await this.assignStateToUser(userId, scores);
 
+        // Criar economia e governança para o estado atribuído
+        const stateManagement = await this.stateService.createStateManagement(
+            userId,
+            assignedState.id,
+            assignedState.country,
+            assignedState.state
+        );
+
         return {
             quiz_result: quizResult.toObject(),
             assigned_state: assignedState,
+            state_management: stateManagement,
             scores
         };
     }
@@ -211,9 +222,9 @@ class QuizService {
     }
 
     /**
-     * Recarregar estado do usuário - CORRIGIDO
+     * Recarregar estado do usuário - ATUALIZADO COM ECONOMIA
      * @param {string} userId - ID do usuário
-     * @returns {Promise<Object>} - Novo estado atribuído
+     * @returns {Promise<Object>} - Novo estado atribuído com economia
      */
     async reloadUserState(userId) {
         // Buscar estado atual
@@ -247,7 +258,21 @@ class QuizService {
         };
 
         // Chamar método específico que não incrementa reload
-        return await this.assignNewStateWithoutIncrement(userId, userScores, updatedState.reload_count);
+        const newStateData = await this.assignNewStateWithoutIncrement(userId, userScores, updatedState.reload_count);
+
+        // Recriar economia e governança para o novo estado
+        const stateManagement = await this.stateService.recreateStateAfterReload(
+            userId,
+            newStateData.id,
+            newStateData.country,
+            newStateData.state
+        );
+
+        return {
+            ...newStateData,
+            state_management: stateManagement,
+            reload_count: updatedState.reload_count
+        };
     }
 
     /**

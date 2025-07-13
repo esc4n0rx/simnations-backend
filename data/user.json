@@ -1,0 +1,816 @@
+{
+    "api_version": "1.0.0",
+    "base_url": "http://localhost:3000/api",
+    "authentication": "Bearer Token required for protected endpoints",
+    "routes": {
+      "auth_register": {
+        "method": "POST",
+        "endpoint": "/auth/register",
+        "description": "Registra um novo usuário no sistema",
+        "authentication": "public",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "username": "testuser2025",
+          "name": "João Silva",
+          "email": "joao.teste@email.com",
+          "password": "MinhaSenh@123",
+          "birth_date": "1995-06-15"
+        },
+        "validation_rules": {
+          "username": "string, 3-50 chars, alphanumeric + underscore only",
+          "name": "string, 2-100 chars",
+          "email": "valid email, max 255 chars",
+          "password": "string, 8-128 chars, must contain uppercase, lowercase, number, special char",
+          "birth_date": "YYYY-MM-DD format, age between 13-120 years"
+        },
+        "response": {
+          "success": true,
+          "message": "Usuário registrado com sucesso",
+          "data": {
+            "user": {
+              "id": "uuid",
+              "username": "testuser2025",
+              "name": "João Silva",
+              "email": "joao.teste@email.com",
+              "birth_date": "1995-06-15",
+              "is_active": true,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 400,
+            "body": {
+              "success": false,
+              "message": "Dados inválidos",
+              "errors": [
+                {
+                  "field": "email",
+                  "message": "Email inválido"
+                }
+              ],
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          {
+            "status": 409,
+            "body": {
+              "success": false,
+              "message": "Email já está em uso",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "auth_login": {
+        "method": "POST",
+        "endpoint": "/auth/login",
+        "description": "Realiza login de usuário existente",
+        "authentication": "public",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "username": "testuser2025",
+          "password": "MinhaSenh@123"
+        },
+        "validation_rules": {
+          "username": "string, required",
+          "password": "string, required"
+        },
+        "response": {
+          "success": true,
+          "message": "Login realizado com sucesso",
+          "data": {
+            "user": {
+              "id": "uuid",
+              "username": "testuser2025",
+              "name": "João Silva",
+              "email": "joao.teste@email.com",
+              "birth_date": "1995-06-15",
+              "is_active": true,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 401,
+            "body": {
+              "success": false,
+              "message": "Credenciais inválidas",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "auth_verify": {
+        "method": "POST",
+        "endpoint": "/auth/verify",
+        "description": "Verifica validade do token JWT",
+        "authentication": "public",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Token válido",
+          "data": {
+            "user": {
+              "id": "uuid",
+              "username": "testuser2025",
+              "name": "João Silva",
+              "email": "joao.teste@email.com",
+              "birth_date": "1995-06-15",
+              "is_active": true,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 401,
+            "body": {
+              "success": false,
+              "message": "Token inválido",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "auth_refresh": {
+        "method": "POST",
+        "endpoint": "/auth/refresh",
+        "description": "Renova token JWT",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Token renovado com sucesso",
+          "data": {
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "auth_logout": {
+        "method": "POST",
+        "endpoint": "/auth/logout",
+        "description": "Realiza logout (invalidação no frontend)",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Logout realizado com sucesso",
+          "data": null,
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "user_get_profile": {
+        "method": "GET",
+        "endpoint": "/user/profile",
+        "description": "Obtém perfil do usuário logado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Perfil obtido com sucesso",
+          "data": {
+            "user": {
+              "id": "uuid",
+              "username": "testuser2025",
+              "name": "João Silva",
+              "email": "joao.teste@email.com",
+              "birth_date": "1995-06-15",
+              "is_active": true,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 404,
+            "body": {
+              "success": false,
+              "message": "Usuário não encontrado",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "user_update_profile": {
+        "method": "PUT",
+        "endpoint": "/user/profile",
+        "description": "Atualiza perfil do usuário",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "name": "João Silva Santos",
+          "email": "joao.novo@email.com",
+          "birth_date": "1995-06-15"
+        },
+        "validation_rules": {
+          "name": "string, 2-100 chars, optional",
+          "email": "valid email, max 255 chars, optional",
+          "birth_date": "YYYY-MM-DD format, age 13-120, optional",
+          "note": "At least one field must be provided"
+        },
+        "response": {
+          "success": true,
+          "message": "Perfil atualizado com sucesso",
+          "data": {
+            "user": {
+              "id": "uuid",
+              "username": "testuser2025",
+              "name": "João Silva Santos",
+              "email": "joao.novo@email.com",
+              "birth_date": "1995-06-15",
+              "is_active": true,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 409,
+            "body": {
+              "success": false,
+              "message": "Email já está em uso por outro usuário",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "user_change_password": {
+        "method": "PUT",
+        "endpoint": "/user/password",
+        "description": "Altera senha do usuário",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "current_password": "MinhaSenh@123",
+          "new_password": "NovaSenha@456",
+          "confirm_password": "NovaSenha@456"
+        },
+        "validation_rules": {
+          "current_password": "string, required",
+          "new_password": "string, 8-128 chars, must contain uppercase, lowercase, number, special char",
+          "confirm_password": "string, must match new_password"
+        },
+        "response": {
+          "success": true,
+          "message": "Senha alterada com sucesso",
+          "data": null,
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+            {
+                "status": 400,
+                "body": {
+                  "success": false,
+                  "message": "Senha atual incorreta",
+                  "timestamp": "2025-07-13T..."
+                }
+              },
+              {
+                "status": 400,
+                "body": {
+                  "success": false,
+                  "message": "Nova senha não atende aos requisitos de segurança",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          },
+          "user_deactivate_account": {
+            "method": "DELETE",
+            "endpoint": "/user/account",
+            "description": "Desativa conta do usuário (soft delete)",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Conta desativada com sucesso",
+              "data": null,
+              "timestamp": "2025-07-13T..."
+            },
+            "error_responses": [
+              {
+                "status": 404,
+                "body": {
+                  "success": false,
+                  "message": "Usuário não encontrado",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          },
+          "user_check_exists": {
+            "method": "GET",
+            "endpoint": "/user/exists/{identifier}",
+            "description": "Verifica se usuário existe (por username ou email)",
+            "authentication": "public",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "request_body": null,
+            "path_parameters": {
+              "identifier": "username or email to check"
+            },
+            "response": {
+              "success": true,
+              "message": "Verificação realizada com sucesso",
+              "data": {
+                "exists": true
+              },
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          "quiz_get_questions": {
+            "method": "GET",
+            "endpoint": "/quiz/questions",
+            "description": "Obtém todas as perguntas do quiz",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Perguntas obtidas com sucesso",
+              "data": {
+                "questions": [
+                  {
+                    "id": 1,
+                    "category": "racionalidade",
+                    "question": "Ao tomar decisões importantes, você prefere:",
+                    "options": [
+                      "Analisar dados e estatísticas",
+                      "Seguir sua intuição",
+                      "Consultar especialistas",
+                      "Considerar experiências passadas",
+                      "Buscar opiniões de outros"
+                    ]
+                  },
+                  {
+                    "id": 2,
+                    "category": "racionalidade",
+                    "question": "Diante de um problema complexo, sua primeira reação é:",
+                    "options": [
+                      "Dividir em partes menores",
+                      "Buscar soluções criativas",
+                      "Procurar exemplos similares",
+                      "Pedir ajuda",
+                      "Tentar várias abordagens"
+                    ]
+                  }
+                ]
+              },
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          "quiz_submit": {
+            "method": "POST",
+            "endpoint": "/quiz/submit",
+            "description": "Submete respostas do quiz e gera estado",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>",
+              "Content-Type": "application/json"
+            },
+            "request_body": {
+              "answers": [
+                {"question_id": 1, "answer_index": 0},
+                {"question_id": 2, "answer_index": 1},
+                {"question_id": 3, "answer_index": 2},
+                {"question_id": 4, "answer_index": 0},
+                {"question_id": 5, "answer_index": 1},
+                {"question_id": 6, "answer_index": 2},
+                {"question_id": 7, "answer_index": 0},
+                {"question_id": 8, "answer_index": 1},
+                {"question_id": 9, "answer_index": 2},
+                {"question_id": 10, "answer_index": 0},
+                {"question_id": 11, "answer_index": 1},
+                {"question_id": 12, "answer_index": 2},
+                {"question_id": 13, "answer_index": 0},
+                {"question_id": 14, "answer_index": 1},
+                {"question_id": 15, "answer_index": 2},
+                {"question_id": 16, "answer_index": 0},
+                {"question_id": 17, "answer_index": 1},
+                {"question_id": 18, "answer_index": 2}
+              ]
+            },
+            "validation_rules": {
+              "answers": "array of 18 objects, each with question_id (1-18) and answer_index (0-4)",
+              "question_id": "integer, 1-18, all questions must be answered once",
+              "answer_index": "integer, 0-4"
+            },
+            "response": {
+              "success": true,
+              "message": "Quiz submetido com sucesso",
+              "data": {
+                "quiz_result": {
+                  "id": "uuid",
+                  "user_id": "uuid",
+                  "racionalidade": 7.5,
+                  "conservadorismo": 5.0,
+                  "audacia": 7.5,
+                  "autoridade": 7.5,
+                  "coletivismo": 7.5,
+                  "influencia": 7.5,
+                  "completed_at": "2025-07-13T..."
+                },
+                "assigned_state": {
+                  "id": "uuid",
+                  "user_id": "uuid",
+                  "country": "Brasil",
+                  "state": "São Paulo",
+                  "assigned_at": "2025-07-13T...",
+                  "reload_count": 0,
+                  "is_active": true,
+                  "compatibility": 87.5,
+                  "state_scores": {
+                    "racionalidade": 8.2,
+                    "conservadorismo": 4.8,
+                    "audacia": 7.1,
+                    "autoridade": 8.5,
+                    "coletivismo": 7.7,
+                    "influencia": 7.8
+                  }
+                },
+                "state_management": {
+                  "economy": {
+                    "id": "uuid",
+                    "user_id": "uuid",
+                    "state_id": "uuid",
+                    "population": 45230000,
+                    "population_growth_rate": 1.2,
+                    "treasury_balance": 8500.75,
+                    "gdp": 1850000.50,
+                    "gdp_growth_rate": 2.8,
+                    "total_debt": 740000.25,
+                    "debt_to_gdp_ratio": 40.0,
+                    "unemployment_rate": 7.2,
+                    "inflation_rate": 3.1,
+                    "monthly_revenue": 27750.80,
+                    "monthly_expenses": 33301.20,
+                    "created_at": "2025-07-13T...",
+                    "updated_at": "2025-07-13T..."
+                  },
+                  "governance": {
+                    "id": "uuid",
+                    "user_id": "uuid",
+                    "state_id": "uuid",
+                    "economy_id": "uuid",
+                    "approval_rating": 58.3,
+                    "approval_trend": "stable",
+                    "political_stability": 72.5,
+                    "corruption_index": 35.2,
+                    "coup_risk_level": "very_low",
+                    "protest_level": "none",
+                    "international_relations": 78.5,
+                    "decision_count": 0,
+                    "positive_decisions": 0,
+                    "negative_decisions": 0,
+                    "created_at": "2025-07-13T...",
+                    "updated_at": "2025-07-13T..."
+                  },
+                  "summary": {
+                    "population_formatted": "45.2M",
+                    "gdp_formatted": "$1850000.5M",
+                    "gdp_per_capita": 40929,
+                    "monthly_balance": -5550.4,
+                    "monthly_balance_formatted": "$-5.6M",
+                    "debt_situation": "moderate",
+                    "approval_level": "moderate",
+                    "political_risk": false,
+                    "overall_status": "moderate"
+                  }
+                },
+                "scores": {
+                  "racionalidade": 7.5,
+                  "conservadorismo": 5.0,
+                  "audacia": 7.5,
+                  "autoridade": 7.5,
+                  "coletivismo": 7.5,
+                  "influencia": 7.5
+                }
+              },
+              "timestamp": "2025-07-13T..."
+            },
+            "error_responses": [
+              {
+                "status": 409,
+                "body": {
+                  "success": false,
+                  "message": "Usuário já completou o quiz",
+                  "timestamp": "2025-07-13T..."
+                }
+              },
+              {
+                "status": 400,
+                "body": {
+                  "success": false,
+                  "message": "Perguntas não respondidas: 5, 8, 12",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          },
+          "quiz_get_result": {
+            "method": "GET",
+            "endpoint": "/quiz/result",
+            "description": "Obtém resultado do quiz do usuário",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Resultado obtido com sucesso",
+              "data": {
+                "quiz_result": {
+                  "id": "uuid",
+                  "user_id": "uuid",
+                  "racionalidade": 7.5,
+                  "conservadorismo": 5.0,
+                  "audacia": 7.5,
+                  "autoridade": 7.5,
+                  "coletivismo": 7.5,
+                  "influencia": 7.5,
+                  "completed_at": "2025-07-13T..."
+                }
+              },
+              "timestamp": "2025-07-13T..."
+            },
+            "error_responses": [
+              {
+                "status": 404,
+                "body": {
+                  "success": false,
+                  "message": "Resultado do quiz não encontrado",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          },
+          "quiz_get_status": {
+            "method": "GET",
+            "endpoint": "/quiz/status",
+            "description": "Verifica status do quiz do usuário",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Status obtido com sucesso",
+              "data": {
+                "quiz_completed": true,
+                "state": {
+                  "id": "uuid",
+                  "user_id": "uuid",
+                  "country": "Brasil",
+                  "state": "São Paulo",
+                  "assigned_at": "2025-07-13T...",
+                  "reload_count": 0,
+                  "is_active": true
+                }
+              },
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          "quiz_get_state": {
+            "method": "GET",
+            "endpoint": "/quiz/state",
+            "description": "Obtém estado atual do usuário",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Estado obtido com sucesso",
+              "data": {
+                "state": {
+                  "id": "uuid",
+                  "user_id": "uuid",
+                  "country": "Brasil",
+                  "state": "São Paulo",
+                  "assigned_at": "2025-07-13T...",
+                  "reload_count": 0,
+                  "is_active": true
+                }
+              },
+              "timestamp": "2025-07-13T..."
+            },
+            "error_responses": [
+              {
+                "status": 404,
+                "body": {
+                  "success": false,
+                  "message": "Estado não encontrado",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          },
+          "quiz_reload_state": {
+            "method": "POST",
+            "endpoint": "/quiz/reload-state",
+            "description": "Recarrega estado do usuário (máximo 3 vezes)",
+            "authentication": "required",
+            "headers": {
+              "Authorization": "Bearer <token>"
+            },
+            "request_body": null,
+            "response": {
+              "success": true,
+              "message": "Estado recarregado com sucesso",
+              "data": {
+                "state": {
+                  "id": "novo-uuid",
+                  "user_id": "uuid",
+                  "country": "Estados Unidos",
+                  "state": "California",
+                  "assigned_at": "2025-07-13T...",
+                  "reload_count": 1,
+                  "is_active": true,
+                  "compatibility": 89.2,
+                  "state_scores": {
+                    "racionalidade": 8.8,
+                    "conservadorismo": 4.2,
+                    "audacia": 8.5,
+                    "autoridade": 8.1,
+                    "coletivismo": 7.9,
+                    "influencia": 8.0
+                  },
+                  "state_management": {
+                    "economy": {
+                      "id": "novo-uuid-economy",
+                      "user_id": "uuid",
+                      "state_id": "novo-uuid",
+                      "population": 39250000,
+                      "population_growth_rate": 0.8,
+                      "treasury_balance": 15500.25,
+                      "gdp": 3200000.75,
+                      "gdp_growth_rate": 3.5,
+                      "total_debt": 960000.50,
+                      "debt_to_gdp_ratio": 30.0,
+                      "unemployment_rate": 4.2,
+                      "inflation_rate": 2.8,
+                      "monthly_revenue": 48000.90,
+                      "monthly_expenses": 45600.30,
+                      "created_at": "2025-07-13T...",
+                      "updated_at": "2025-07-13T..."
+                    },
+                    "governance": {
+                      "id": "novo-uuid-governance",
+                      "user_id": "uuid",
+                      "state_id": "novo-uuid",
+                      "economy_id": "novo-uuid-economy",
+                      "approval_rating": 52.8,
+                      "approval_trend": "stable",
+                      "political_stability": 78.2,
+                      "corruption_index": 28.5,
+                      "coup_risk_level": "very_low",
+                      "protest_level": "none",
+                      "international_relations": 82.1,
+                      "decision_count": 0,
+                      "positive_decisions": 0,
+                      "negative_decisions": 0,
+                      "created_at": "2025-07-13T...",
+                      "updated_at": "2025-07-13T..."
+                    },
+                    "summary": {
+                      "population_formatted": "39.3M",
+                      "gdp_formatted": "$3200000.8M",
+                      "gdp_per_capita": 81529,
+                      "monthly_balance": 2400.6,
+                      "monthly_balance_formatted": "$2.4M",
+                      "debt_situation": "excellent",
+                      "approval_level": "moderate",
+                      "political_risk": false,
+                      "overall_status": "good"
+                    }
+                  },
+                  "reload_count": 1
+                }
+              },
+              "timestamp": "2025-07-13T..."
+            },
+            "error_responses": [
+              {
+                "status": 400,
+                "body": {
+                  "success": false,
+                  "message": "Número máximo de reloads atingido",
+                  "timestamp": "2025-07-13T..."
+                }
+              },
+              {
+                "status": 404,
+                "body": {
+                  "success": false,
+                  "message": "Usuário não possui estado atribuído",
+                  "timestamp": "2025-07-13T..."
+                }
+              }
+            ]
+          }
+        },
+        "quiz_categories": {
+          "racionalidade": "Tomada de decisões baseada em lógica e dados",
+          "conservadorismo": "Tendência a manter tradições e valores estabelecidos",
+          "audacia": "Disposição para mudanças e inovações",
+          "autoridade": "Centralização do poder e hierarquia",
+          "coletivismo": "Foco no bem comum vs individualismo",
+          "influencia": "Capacidade de diplomacia e relações internacionais"
+        },
+        "password_requirements": {
+          "min_length": 8,
+          "max_length": 128,
+          "must_contain": [
+            "At least one uppercase letter (A-Z)",
+            "At least one lowercase letter (a-z)",
+            "At least one number (0-9)",
+            "At least one special character (!@#$%^&*(),.?\":{}|<>)"
+          ]
+        },
+        "rate_limits": {
+          "default": "100 requests per 15 minutes per IP",
+          "auth_endpoints": "5 requests per minute per IP for login/register"
+        },
+        "data_types": {
+          "quiz_scores": "decimal(3,1) between 0.0 and 10.0",
+          "answer_index": "integer between 0 and 4",
+          "question_id": "integer between 1 and 18",
+          "reload_count": "integer between 0 and 3",
+          "approval_rating": "decimal(5,2) between 0.00 and 100.00"
+        },
+        "curl_examples": {
+          "register": "curl -X POST http://localhost:3000/api/auth/register -H \"Content-Type: application/json\" -d '{\"username\":\"test\",\"name\":\"Test User\",\"email\":\"test@email.com\",\"password\":\"Test@123\",\"birth_date\":\"1995-01-01\"}'",
+          "login": "curl -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"username\":\"test\",\"password\":\"Test@123\"}'",
+          "get_profile": "curl -X GET http://localhost:3000/api/user/profile -H \"Authorization: Bearer <token>\"",
+          "get_quiz_questions": "curl -X GET http://localhost:3000/api/quiz/questions -H \"Authorization: Bearer <token>\"",
+          "submit_quiz": "curl -X POST http://localhost:3000/api/quiz/submit -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{\"answers\":[{\"question_id\":1,\"answer_index\":0},...]}'"
+        },
+        "workflow": {
+          "new_user_flow": [
+            "1. POST /auth/register - Register new user",
+            "2. GET /quiz/status - Check if quiz completed",
+            "3. GET /quiz/questions - Get quiz questions",
+            "4. POST /quiz/submit - Submit quiz answers",
+            "5. GET /state/data - Access state management"
+          ],
+          "returning_user_flow": [
+            "1. POST /auth/login - Login existing user",
+            "2. GET /quiz/status - Check quiz/state status",
+            "3. GET /state/summary - Get state overview",
+            "4. GET /state/data - Full state management"
+          ],
+          "state_reload_flow": [
+            "1. POST /quiz/reload-state - Request new state",
+            "2. GET /state/data - View new state data",
+            "3. PUT /state/economy - Update economy if needed",
+            "4. PUT /state/governance - Update governance if needed"
+          ]
+        }
+       }

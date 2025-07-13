@@ -1,0 +1,548 @@
+{
+    "api_version": "1.0.0",
+    "base_url": "http://localhost:3000/api/state",
+    "authentication": "Bearer Token required for all endpoints",
+    "routes": {
+      "get_complete_state_data": {
+        "method": "GET",
+        "endpoint": "/data",
+        "description": "Obtém dados completos do estado (economia, governança, análise)",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Dados do estado obtidos com sucesso",
+          "data": {
+            "economy": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "population": 45230000,
+              "population_growth_rate": 1.2,
+              "treasury_balance": 8500.75,
+              "gdp": 1850000.50,
+              "gdp_growth_rate": 2.8,
+              "total_debt": 740000.25,
+              "debt_to_gdp_ratio": 40.0,
+              "unemployment_rate": 7.2,
+              "inflation_rate": 3.1,
+              "monthly_revenue": 27750.80,
+              "monthly_expenses": 33301.20,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "governance": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "economy_id": "uuid",
+              "approval_rating": 58.3,
+              "approval_trend": "stable",
+              "political_stability": 72.5,
+              "corruption_index": 35.2,
+              "coup_risk_level": "very_low",
+              "protest_level": "none",
+              "international_relations": 78.5,
+              "decision_count": 0,
+              "positive_decisions": 0,
+              "negative_decisions": 0,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "state_info": {
+              "id": "uuid",
+              "country": "Brasil",
+              "state": "São Paulo",
+              "is_active": true,
+              "assigned_at": "2025-07-13T...",
+              "reload_count": 0
+            },
+            "summary": {
+              "population_formatted": "45.2M",
+              "gdp_formatted": "$1850000.5M",
+              "gdp_per_capita": 40929,
+              "monthly_balance": -5550.4,
+              "monthly_balance_formatted": "$-5.6M",
+              "debt_situation": "moderate",
+              "approval_level": "moderate",
+              "political_risk": false,
+              "overall_status": "moderate"
+            },
+            "analysis": {
+              "economic_health": {
+                "score": 67,
+                "status": "good",
+                "description": "Economia saudável com bons indicadores",
+                "key_metrics": {
+                  "gdp_per_capita": 40929,
+                  "unemployment": 7.2,
+                  "debt_ratio": 40,
+                  "growth_rate": 2.8,
+                  "monthly_balance": -5550.4
+                }
+              },
+              "political_health": {
+                "score": 68,
+                "status": "good",
+                "description": "Governo com boa aprovação popular",
+                "key_metrics": {
+                  "approval_rating": 58.3,
+                  "political_stability": 72.5,
+                  "international_relations": 78.5,
+                  "corruption_index": 35.2,
+                  "coup_risk": "very_low",
+                  "protest_level": "none"
+                }
+              },
+              "key_challenges": [
+                {
+                  "type": "economic",
+                  "priority": "medium",
+                  "title": "Déficit Orçamentário",
+                  "description": "Gastos mensais excedem as receitas"
+                }
+              ],
+              "recommendations": [
+                {
+                  "type": "economic",
+                  "priority": "medium",
+                  "title": "Equilibrio Orçamentário",
+                  "description": "Revisar despesas e otimizar receitas"
+                }
+              ],
+              "risk_factors": []
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 404,
+            "body": {
+              "success": false,
+              "message": "Dados do estado não encontrados",
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          {
+            "status": 401,
+            "body": {
+              "success": false,
+              "message": "Token de acesso requerido",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "get_economy_data": {
+        "method": "GET",
+        "endpoint": "/economy",
+        "description": "Obtém apenas dados econômicos do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Dados econômicos obtidos com sucesso",
+          "data": {
+            "economy": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "population": 45230000,
+              "population_growth_rate": 1.2,
+              "treasury_balance": 8500.75,
+              "gdp": 1850000.50,
+              "gdp_growth_rate": 2.8,
+              "total_debt": 740000.25,
+              "debt_to_gdp_ratio": 40.0,
+              "unemployment_rate": 7.2,
+              "inflation_rate": 3.1,
+              "monthly_revenue": 27750.80,
+              "monthly_expenses": 33301.20,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "summary": {
+              "population_formatted": "45.2M",
+              "gdp_formatted": "$1850000.5M",
+              "gdp_per_capita": 40929,
+              "monthly_balance": -5550.4,
+              "monthly_balance_formatted": "$-5.6M",
+              "debt_situation": "moderate",
+              "approval_level": "moderate",
+              "political_risk": false,
+              "overall_status": "moderate"
+            },
+            "analysis": {
+              "score": 67,
+              "status": "good",
+              "description": "Economia saudável com bons indicadores",
+              "key_metrics": {
+                "gdp_per_capita": 40929,
+                "unemployment": 7.2,
+                "debt_ratio": 40,
+                "growth_rate": 2.8,
+                "monthly_balance": -5550.4
+              }
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "get_governance_data": {
+        "method": "GET",
+        "endpoint": "/governance",
+        "description": "Obtém apenas dados de governança do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Dados de governança obtidos com sucesso",
+          "data": {
+            "governance": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "economy_id": "uuid",
+              "approval_rating": 58.3,
+              "approval_trend": "stable",
+              "political_stability": 72.5,
+              "corruption_index": 35.2,
+              "coup_risk_level": "very_low",
+              "protest_level": "none",
+              "international_relations": 78.5,
+              "decision_count": 0,
+              "positive_decisions": 0,
+              "negative_decisions": 0,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            },
+            "analysis": {
+              "score": 68,
+              "status": "good",
+              "description": "Governo com boa aprovação popular",
+              "key_metrics": {
+                "approval_rating": 58.3,
+                "political_stability": 72.5,
+                "international_relations": 78.5,
+                "corruption_index": 35.2,
+                "coup_risk": "very_low",
+                "protest_level": "none"
+              }
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "get_state_analysis": {
+        "method": "GET",
+        "endpoint": "/analysis",
+        "description": "Obtém análise detalhada do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Análise do estado obtida com sucesso",
+          "data": {
+            "analysis": {
+              "economic_health": {
+                "score": 67,
+                "status": "good",
+                "description": "Economia saudável com bons indicadores",
+                "key_metrics": {
+                  "gdp_per_capita": 40929,
+                  "unemployment": 7.2,
+                  "debt_ratio": 40,
+                  "growth_rate": 2.8,
+                  "monthly_balance": -5550.4
+                }
+              },
+              "political_health": {
+                "score": 68,
+                "status": "good",
+                "description": "Governo com boa aprovação popular",
+                "key_metrics": {
+                  "approval_rating": 58.3,
+                  "political_stability": 72.5,
+                  "international_relations": 78.5,
+                  "corruption_index": 35.2,
+                  "coup_risk": "very_low",
+                  "protest_level": "none"
+                }
+              },
+              "key_challenges": [
+                {
+                  "type": "economic",
+                  "priority": "medium",
+                  "title": "Déficit Orçamentário",
+                  "description": "Gastos mensais excedem as receitas"
+                }
+              ],
+              "recommendations": [
+                {
+                  "type": "economic",
+                  "priority": "medium",
+                  "title": "Equilibrio Orçamentário",
+                  "description": "Revisar despesas e otimizar receitas"
+                }
+              ],
+              "risk_factors": []
+            },
+            "summary": {
+              "population_formatted": "45.2M",
+              "gdp_formatted": "$1850000.5M",
+              "gdp_per_capita": 40929,
+              "monthly_balance": -5550.4,
+              "monthly_balance_formatted": "$-5.6M",
+              "debt_situation": "moderate",
+              "approval_level": "moderate",
+              "political_risk": false,
+              "overall_status": "moderate"
+            },
+            "state_info": {
+              "id": "uuid",
+              "country": "Brasil",
+              "state": "São Paulo",
+              "is_active": true,
+              "assigned_at": "2025-07-13T...",
+              "reload_count": 0
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "get_executive_summary": {
+        "method": "GET",
+        "endpoint": "/summary",
+        "description": "Obtém resumo executivo do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": null,
+        "response": {
+          "success": true,
+          "message": "Resumo executivo obtido com sucesso",
+          "data": {
+            "state_info": {
+              "country": "Brasil",
+              "state": "São Paulo",
+              "assigned_at": "2025-07-13T...",
+              "reload_count": 0
+            },
+            "key_metrics": {
+              "population": "45.2M",
+              "gdp": "$1850000.5M",
+              "approval_rating": 58,
+              "economic_status": "good",
+              "political_status": "good"
+            },
+            "current_situation": {
+              "overall_status": "moderate",
+              "political_risk": false,
+              "debt_situation": "moderate",
+              "monthly_balance": "$-5.6M"
+            },
+            "immediate_concerns": [
+              {
+                "type": "economic",
+                "priority": "medium",
+                "title": "Déficit Orçamentário",
+                "description": "Gastos mensais excedem as receitas"
+              }
+            ],
+            "next_actions": []
+          },
+          "timestamp": "2025-07-13T..."
+        }
+      },
+      "update_economy": {
+        "method": "PUT",
+        "endpoint": "/economy",
+        "description": "Atualiza dados econômicos do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "treasury_balance": 12000.00,
+          "monthly_revenue": 35000.00,
+          "monthly_expenses": 32000.00,
+          "population_growth_rate": 1.5,
+          "gdp_growth_rate": 3.2,
+          "unemployment_rate": 6.5,
+          "inflation_rate": 2.8
+        },
+        "validation_rules": {
+          "treasury_balance": "number >= 0, optional",
+          "monthly_revenue": "number >= 0, optional",
+          "monthly_expenses": "number >= 0, optional",
+          "population_growth_rate": "number between -10 and 10, optional",
+          "gdp_growth_rate": "number between -20 and 20, optional",
+          "unemployment_rate": "number between 0 and 100, optional",
+          "inflation_rate": "number between -10 and 50, optional"
+        },
+        "response": {
+          "success": true,
+          "message": "Economia atualizada com sucesso",
+          "data": {
+            "economy": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "population": 45230000,
+              "population_growth_rate": 1.5,
+              "treasury_balance": 12000.00,
+              "gdp": 1850000.50,
+              "gdp_growth_rate": 3.2,
+              "total_debt": 740000.25,
+              "debt_to_gdp_ratio": 40.0,
+              "unemployment_rate": 6.5,
+              "inflation_rate": 2.8,
+              "monthly_revenue": 35000.00,
+              "monthly_expenses": 32000.00,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 400,
+            "body": {
+              "success": false,
+              "message": "Dados inválidos",
+              "errors": [
+                {
+                  "field": "unemployment_rate",
+                  "message": "Taxa de desemprego não pode ser maior que 100%"
+                }
+              ],
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          {
+            "status": 404,
+            "body": {
+              "success": false,
+              "message": "Estado não encontrado",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      },
+      "update_governance": {
+        "method": "PUT",
+        "endpoint": "/governance",
+        "description": "Atualiza dados de governança do estado",
+        "authentication": "required",
+        "headers": {
+          "Authorization": "Bearer <token>",
+          "Content-Type": "application/json"
+        },
+        "request_body": {
+          "approval_rating": 65.5,
+          "political_stability": 80.0,
+          "corruption_index": 30.0,
+          "international_relations": 85.0,
+          "approval_trend": "rising",
+          "coup_risk_level": "very_low",
+          "protest_level": "none"
+        },
+        "validation_rules": {
+          "approval_rating": "number between 0 and 100, optional",
+          "political_stability": "number between 0 and 100, optional",
+          "corruption_index": "number between 0 and 100, optional",
+          "international_relations": "number between 0 and 100, optional",
+          "approval_trend": "enum: ['rising', 'falling', 'stable'], optional",
+          "coup_risk_level": "enum: ['very_low', 'low', 'medium', 'high', 'critical'], optional",
+          "protest_level": "enum: ['none', 'minor', 'moderate', 'major', 'widespread'], optional"
+        },
+        "response": {
+          "success": true,
+          "message": "Governança atualizada com sucesso",
+          "data": {
+            "governance": {
+              "id": "uuid",
+              "user_id": "uuid",
+              "state_id": "uuid",
+              "economy_id": "uuid",
+              "approval_rating": 65.5,
+              "approval_trend": "rising",
+              "political_stability": 80.0,
+              "corruption_index": 30.0,
+              "coup_risk_level": "very_low",
+              "protest_level": "none",
+              "international_relations": 85.0,
+              "decision_count": 0,
+              "positive_decisions": 0,
+              "negative_decisions": 0,
+              "created_at": "2025-07-13T...",
+              "updated_at": "2025-07-13T..."
+            }
+          },
+          "timestamp": "2025-07-13T..."
+        },
+        "error_responses": [
+          {
+            "status": 400,
+            "body": {
+              "success": false,
+              "message": "Dados inválidos",
+              "errors": [
+                {
+                  "field": "approval_trend",
+                  "message": "Tendência deve ser: rising, falling ou stable"
+                }
+              ],
+              "timestamp": "2025-07-13T..."
+            }
+          },
+          {
+            "status": 404,
+            "body": {
+              "success": false,
+              "message": "Governança não encontrada",
+              "timestamp": "2025-07-13T..."
+            }
+          }
+        ]
+      }
+    },
+    "data_types": {
+      "economy_status": ["excellent", "good", "moderate", "poor", "critical"],
+      "political_status": ["excellent", "good", "moderate", "poor", "critical"],
+      "debt_situation": ["excellent", "good", "moderate", "poor", "critical"],
+      "approval_trend": ["rising", "falling", "stable"],
+      "coup_risk_level": ["very_low", "low", "medium", "high", "critical"],
+      "protest_level": ["none", "minor", "moderate", "major", "widespread"],
+      "challenge_priority": ["critical", "high", "medium", "low"],
+      "challenge_type": ["economic", "political", "diplomatic"],
+      "recommendation_priority": ["high", "medium", "low"],
+      "risk_severity": ["critical", "high", "medium", "low"]
+    },
+    "curl_examples": {
+      "get_state_data": "curl -X GET http://localhost:3000/api/state/data -H \"Authorization: Bearer <token>\"",
+      "update_economy": "curl -X PUT http://localhost:3000/api/state/economy -H \"Authorization: Bearer <token>\" -H \"Content-Type: application/json\" -d '{\"treasury_balance\": 12000.00, \"unemployment_rate\": 6.5}'",
+      "get_summary": "curl -X GET http://localhost:3000/api/state/summary -H \"Authorization: Bearer <token>\""
+    }
+  }

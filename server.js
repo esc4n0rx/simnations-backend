@@ -11,6 +11,7 @@ const errorMiddleware = require('./src/presentation/middleware/error-middleware'
 const authRoutes = require('./src/presentation/routes/auth-routes');
 const userRoutes = require('./src/presentation/routes/user-routes');
 const quizRoutes = require('./src/presentation/routes/quiz-routes');
+const stateRoutes = require('./src/presentation/routes/state-routes'); // NOVO
 
 // Importar utils
 const { testConnection } = require('./src/infrastructure/database/supabase-client');
@@ -61,6 +62,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/quiz', quizRoutes);
+app.use('/api/state', stateRoutes); // NOVA ROTA
 
 // Middleware de tratamento de erros
 app.use(errorMiddleware);
