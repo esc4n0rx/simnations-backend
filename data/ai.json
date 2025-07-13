@@ -1,0 +1,519 @@
+{
+    "ai_system": {
+      "name": "SimNations Political Events AI",
+      "version": "1.0.0",
+      "description": "Sistema de IA para geração de eventos políticos e análise de decisões governamentais",
+      "base_url": "http://localhost:3000/api",
+      "authentication": {
+        "type": "Bearer Token",
+        "header": "Authorization",
+        "format": "Bearer {token}"
+      }
+    },
+    "endpoints": {
+      "system_status": {
+        "method": "GET",
+        "path": "/events/system/status",
+        "description": "Verificar status do sistema de IA",
+        "authentication": true,
+        "parameters": {},
+        "response": {
+          "success": true,
+          "data": {
+            "llm_provider_available": true,
+            "model_info": {
+              "provider": "Groq",
+              "model": "llama3-70b-8192",
+              "max_tokens": 2048,
+              "temperature": 0.7,
+              "top_p": 0.9,
+              "supports_json": true,
+              "supports_streaming": false,
+              "api_key_configured": true
+            },
+            "agents_status": {
+              "scenario_agent": true,
+              "population_agent": true,
+              "institutional_agent": true
+            },
+            "system_ready": true,
+            "error": null,
+            "last_check": "2025-07-13T15:30:00.000Z"
+          }
+        }
+      },
+      "generate_event": {
+        "method": "POST",
+        "path": "/events/generate",
+        "description": "Gerar novo evento político usando IA",
+        "authentication": true,
+        "payload": {
+          "force_generation": false,
+          "preferred_type": "economic",
+          "preferred_severity": "medium"
+        },
+        "payload_schema": {
+          "force_generation": {
+            "type": "boolean",
+            "optional": true,
+            "default": false,
+            "description": "Forçar geração mesmo em cooldown"
+          },
+          "preferred_type": {
+            "type": "string",
+            "optional": true,
+            "enum": ["economic", "social", "political", "administrative", "infrastructure"],
+            "description": "Tipo preferido de evento"
+          },
+          "preferred_severity": {
+            "type": "string",
+            "optional": true,
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "Severidade preferida do evento"
+          }
+        },
+        "responses": {
+          "success": {
+            "status": 201,
+            "data": {
+              "event": {
+                "id": "uuid",
+                "title": "Crise no Sistema de Transporte Público",
+                "description": "Uma greve dos motoristas de ônibus está paralisando o transporte público da cidade...",
+                "event_type": "infrastructure",
+                "severity": "high",
+                "status": "pending",
+                "expires_at": "2025-07-14T03:30:00.000Z",
+                "created_at": "2025-07-13T15:30:00.000Z"
+              },
+              "options": [
+                {
+                  "id": "uuid",
+                  "option_index": 0,
+                  "title": "Negociar com os sindicatos",
+                  "description": "Abrir mesa de negociação imediata com representantes dos motoristas...",
+                  "predicted_impacts": {
+                    "general_sentiment": "positive",
+                    "predicted_approval_change": 3
+                  }
+                },
+                {
+                  "id": "uuid",
+                  "option_index": 1,
+                  "title": "Decretar transporte emergencial",
+                  "description": "Usar frota municipal de emergência e requisitar veículos privados...",
+                  "predicted_impacts": {
+                    "general_sentiment": "neutral",
+                    "predicted_approval_change": 0
+                  }
+                },
+                {
+                  "id": "uuid",
+                  "option_index": 2,
+                  "title": "Aplicar medidas legais rigorosas",
+                  "description": "Declarar a greve ilegal e aplicar sanções aos grevistas...",
+                  "predicted_impacts": {
+                    "general_sentiment": "negative",
+                    "predicted_approval_change": -4
+                  }
+                }
+              ],
+              "generation_metadata": {
+                "processing_time_ms": 2150,
+                "generated_at": "2025-07-13T15:30:00.000Z"
+              }
+            }
+          },
+          "cooldown": {
+            "status": 429,
+            "error": {
+              "message": "Cooldown geral ativo",
+              "next_available": "2025-07-14T15:30:00.000Z"
+            }
+          },
+          "active_event": {
+            "status": 409,
+            "error": {
+              "message": "Usuário já possui evento ativo",
+              "active_event": {
+                "id": "uuid",
+                "title": "Evento Ativo Existente"
+              }
+            }
+          }
+        }
+      },
+      "get_active_event": {
+        "method": "GET",
+        "path": "/events/active",
+        "description": "Obter evento ativo do usuário",
+        "authentication": true,
+        "response": {
+          "success": true,
+          "data": {
+            "event": {
+              "id": "uuid",
+              "title": "Crise no Sistema de Transporte Público",
+              "description": "Uma greve dos motoristas de ônibus está paralisando...",
+              "event_type": "infrastructure",
+              "severity": "high",
+              "status": "pending",
+              "expires_at": "2025-07-14T03:30:00.000Z",
+              "options": [
+                {
+                  "id": "uuid",
+                  "option_index": 0,
+                  "title": "Negociar com os sindicatos",
+                  "description": "Abrir mesa de negociação..."
+                }
+              ]
+            }
+          }
+        }
+      },
+      "make_decision": {
+        "method": "POST", 
+        "path": "/events/{event_id}/decide",
+        "description": "Processar decisão do jogador usando IA para gerar reações",
+        "authentication": true,
+        "path_parameters": {
+          "event_id": {
+            "type": "uuid",
+            "description": "ID do evento político ativo"
+          }
+        },
+        "payload": {
+          "option_id": "550e8400-e29b-41d4-a716-446655440000",
+          "reasoning": "Acredito que negociar é a melhor opção para manter a estabilidade social e encontrar uma solução sustentável para o problema."
+        },
+        "payload_schema": {
+          "option_id": {
+            "type": "uuid",
+            "required": true,
+            "description": "ID da opção de decisão escolhida"
+          },
+          "reasoning": {
+            "type": "string",
+            "optional": true,
+            "max_length": 500,
+            "description": "Justificativa do jogador para a decisão"
+          }
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "decision": {
+              "id": "uuid",
+              "option_id": "uuid",
+              "decision_reasoning": "Acredito que negociar é a melhor opção...",
+              "decided_at": "2025-07-13T16:00:00.000Z"
+            },
+            "chosen_option": {
+              "id": "uuid",
+              "title": "Negociar com os sindicatos",
+              "description": "Abrir mesa de negociação imediata..."
+            },
+            "agent_reactions": [
+              {
+                "id": "uuid",
+                "agent_type": "population",
+                "narrative_response": "A população recebeu bem a decisão do governador de negociar. Nas redes sociais, muitos elogiam a postura diplomática...",
+                "governance_impacts": {
+                  "approval_rating": 5,
+                  "political_stability": 2
+                },
+                "economic_impacts": {
+                  "monthly_expenses": 0.5
+                },
+                "processing_time_ms": 1150
+              },
+              {
+                "id": "uuid",
+                "agent_type": "institutional",
+                "institutional_persona": "unions",
+                "narrative_response": "Os sindicatos avaliam positivamente a abertura para diálogo. Esta decisão demonstra responsabilidade social...",
+                "governance_impacts": {
+                  "approval_rating": 3,
+                  "political_stability": 3
+                },
+                "economic_impacts": {
+                  "monthly_expenses": 1.2,
+                  "unemployment_rate": -0.1
+                },
+                "processing_time_ms": 1576
+              }
+            ],
+            "applied_impacts": {
+              "governance_changes": {
+                "approval_rating": 58.0,
+                "political_stability": 78.0
+              },
+              "economic_changes": {
+                "monthly_expenses": 1501.7,
+                "unemployment_rate": 4.9
+              },
+              "total_governance_impacts": {
+                "approval_rating": 8,
+                "political_stability": 5
+              },
+              "total_economic_impacts": {
+                "monthly_expenses": 1.7,
+                "unemployment_rate": -0.1
+              }
+            },
+            "new_state_data": {
+              "economy": {
+                "gdp": 1500000,
+                "unemployment_rate": 4.9,
+                "monthly_expenses": 1501.7
+              },
+              "governance": {
+                "approval_rating": 58.0,
+                "political_stability": 78.0
+              }
+            }
+          }
+        }
+      },
+      "get_event_history": {
+        "method": "GET",
+        "path": "/events/history",
+        "description": "Obter histórico de eventos e decisões do usuário",
+        "authentication": true,
+        "query_parameters": {
+          "limit": {
+            "type": "integer",
+            "optional": true,
+            "default": 10,
+            "min": 1,
+            "max": 50,
+            "description": "Número máximo de eventos a retornar"
+          },
+          "include_reactions": {
+            "type": "boolean",
+            "optional": true,
+            "default": true,
+            "description": "Incluir reações dos agentes IA"
+          },
+          "event_type": {
+            "type": "string",
+            "optional": true,
+            "enum": ["economic", "social", "political", "administrative", "infrastructure"],
+            "description": "Filtrar por tipo de evento"
+          }
+        },
+        "response": {
+          "success": true,
+          "data": {
+            "events": [
+              {
+                "id": "uuid",
+                "title": "Crise no Sistema de Transporte Público",
+                "event_type": "infrastructure",
+                "severity": "high",
+                "status": "completed",
+                "created_at": "2025-07-13T15:30:00.000Z",
+                "completed_at": "2025-07-13T16:00:00.000Z",
+                "decisions": [
+                  {
+                    "id": "uuid",
+                    "decided_at": "2025-07-13T16:00:00.000Z",
+                    "option": {
+                      "title": "Negociar com os sindicatos"
+                    },
+                    "agent_reactions": [
+                      {
+                        "agent_type": "population",
+                        "narrative_response": "A população recebeu bem..."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "total": 1
+          }
+        }
+      },
+      "get_event_statistics": {
+        "method": "GET",
+        "path": "/events/statistics",
+        "description": "Obter estatísticas dos eventos e performance da IA",
+        "authentication": true,
+        "response": {
+          "success": true,
+          "data": {
+            "total_events": 15,
+            "events_by_type": {
+              "economic": 5,
+              "social": 3,
+              "political": 4,
+              "infrastructure": 2,
+              "administrative": 1
+            },
+            "events_by_severity": {
+              "low": 3,
+              "medium": 8,
+              "high": 3,
+              "critical": 1
+            },
+            "avg_processing_time": 1850,
+            "decision_patterns": {
+              "most_chosen_option_index": 1,
+              "avg_decision_time": null
+            }
+          }
+        }
+      },
+      "expire_old_events": {
+        "method": "POST",
+        "path": "/events/admin/expire",
+        "description": "Forçar expiração de eventos antigos (admin)",
+        "authentication": true,
+        "payload": {},
+        "response": {
+          "success": true,
+          "data": {
+            "expired_events": 3
+          },
+          "message": "3 eventos expirados com sucesso"
+        }
+      }
+    },
+    "ai_agents": {
+      "scenario_generator": {
+        "name": "Agente Gerador de Cenários",
+        "description": "Gera eventos políticos contextualizados baseados no estado atual",
+        "model": "llama3-70b-8192",
+        "capabilities": [
+          "Análise de contexto econômico e político",
+          "Geração de cenários realistas",
+          "Criação de opções de decisão balanceadas",
+          "Classificação automática de eventos"
+        ],
+        "input_data": [
+          "Dados econômicos do estado",
+          "Indicadores de governança",
+          "Histórico de eventos recentes",
+          "Demografia e características regionais"
+        ],
+        "output_format": {
+          "title": "string (máx 200 chars)",
+          "description": "string (150-300 palavras)",
+          "event_type": "enum",
+          "severity": "enum",
+          "options": "array[3-4] opções de decisão"
+        }
+      },
+      "population_agent": {
+        "name": "Agente da População",
+        "description": "Simula reação popular às decisões governamentais",
+        "model": "llama3-70b-8192",
+        "capabilities": [
+          "Análise de sentimento popular",
+          "Geração de reações emocionais autênticas",
+          "Cálculo de impactos na aprovação",
+          "Simulação de protestos e manifestações"
+        ],
+        "impact_categories": [
+          "approval_rating (-10 a +10)",
+          "protest_level (0 a 10)",
+          "unemployment_perception (-10 a +10)",
+          "inflation_perception (-10 a +10)"
+        ],
+        "response_style": "Linguagem coloquial e emocional, perspectiva cidadã"
+      },
+      "institutional_agent": {
+        "name": "Agente Institucional",
+        "description": "Fornece análise técnica sob diferentes perspectivas institucionais",
+        "model": "llama3-70b-8192", 
+        "personas": [
+          "ministry_of_economy",
+          "investors", 
+          "unions",
+          "business_sector",
+          "press",
+          "academia"
+        ],
+        "capabilities": [
+          "Análise técnica especializada",
+          "Avaliação de impactos setoriais",
+          "Projeções econômicas e políticas",
+          "Recomendações baseadas em expertise"
+        ],
+        "impact_categories": [
+          "political_stability (-15 a +15)",
+          "monthly_revenue (-15 a +15)", 
+          "monthly_expenses (-15 a +15)",
+          "gdp_growth_rate (-15 a +15)",
+          "corruption_index (-15 a +15)",
+          "international_relations (-15 a +15)"
+        ],
+        "response_style": "Linguagem técnica e formal, análise fundamentada"
+      }
+    },
+    "data_flow": {
+      "event_generation": {
+        "step_1": "Análise do estado atual (economia + governança)",
+        "step_2": "Verificação de cooldowns e eventos recentes", 
+        "step_3": "Geração de cenário pelo Agente Cenário",
+        "step_4": "Criação de opções de decisão",
+        "step_5": "Armazenamento e retorno do evento"
+      },
+      "decision_processing": {
+        "step_1": "Validação da decisão e opção escolhida",
+        "step_2": "Geração paralela de reações (População + Institucional)",
+        "step_3": "Consolidação de impactos de todas as reações",
+        "step_4": "Aplicação de mudanças no estado do usuário",
+        "step_5": "Log de auditoria e resposta completa"
+      }
+    },
+    "error_handling": {
+      "llm_unavailable": {
+        "code": 503,
+        "message": "Sistema de IA temporariamente indisponível",
+        "fallback": "Usar reações padrão baseadas em templates"
+      },
+      "invalid_event": {
+        "code": 400,
+        "message": "Evento não encontrado ou expirado"
+      },
+      "cooldown_active": {
+        "code": 429, 
+        "message": "Aguarde antes de gerar novo evento",
+        "retry_after": "timestamp"
+      },
+      "validation_error": {
+        "code": 400,
+        "message": "Dados de entrada inválidos",
+        "details": "array de erros específicos"
+      }
+    },
+    "testing": {
+      "environment_variables": {
+        "GROQ_API_KEY": "required - Chave da API Groq",
+        "GROQ_MODEL": "optional - Modelo a usar (default: llama3-70b-8192)",
+        "NODE_ENV": "development/production"
+      },
+      "test_scenarios": [
+        {
+          "name": "Geração de evento econômico",
+          "description": "Testar geração de evento com estado em crise fiscal",
+          "setup": "Estado com alto desemprego e déficit orçamentário",
+          "expected": "Evento tipo 'economic' com severidade 'high'"
+        },
+        {
+          "name": "Decisão controversa",
+          "description": "Testar reações a decisão impopular",
+          "setup": "Escolher opção com predicted_approval_change negativo",
+          "expected": "Reação popular negativa, possível aumento de protestos"
+        },
+        {
+          "name": "Sistema em fallback",
+          "description": "Testar comportamento sem API da IA",
+          "setup": "Desativar GROQ_API_KEY",
+          "expected": "Usar reações padrão, sistema continua funcionando"
+        }
+      ]
+    }
+  }

@@ -121,14 +121,26 @@ class PoliticalEventRepository {
     }
 
     /**
-     * Salvar reação de agente
+     * Salvar reação de agente (CORRIGIDO)
      * @param {Object} reactionData - Dados da reação
      * @returns {Promise<AgentReaction>} - Reação salva
      */
     async saveAgentReaction(reactionData) {
+        // Filtrar dados para incluir apenas campos válidos da tabela
+        const validData = {
+            decision_id: reactionData.decision_id,
+            agent_type: reactionData.agent_type,
+            narrative_response: reactionData.narrative_response,
+            institutional_persona: reactionData.institutional_persona || null,
+            governance_impacts: reactionData.governance_impacts || {},
+            economic_impacts: reactionData.economic_impacts || {},
+            raw_impacts: reactionData.raw_impacts || {},
+            processing_time_ms: reactionData.processing_time_ms || 0
+        };
+
         const { data, error } = await supabase
             .from('agent_reactions')
-            .insert([reactionData])
+            .insert([validData])
             .select()
             .single();
 

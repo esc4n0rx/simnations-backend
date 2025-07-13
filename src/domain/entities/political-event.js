@@ -115,6 +115,7 @@ class AgentReaction {
         this.institutional_persona = data.institutional_persona;
         this.governance_impacts = data.governance_impacts || {};
         this.economic_impacts = data.economic_impacts || {};
+        this.raw_impacts = data.raw_impacts || {}; // ADICIONADO
         this.processing_time_ms = data.processing_time_ms;
         this.created_at = data.created_at;
     }
@@ -128,6 +129,7 @@ class AgentReaction {
             institutional_persona: this.institutional_persona,
             governance_impacts: this.governance_impacts,
             economic_impacts: this.economic_impacts,
+            raw_impacts: this.raw_impacts, // ADICIONADO
             processing_time_ms: this.processing_time_ms,
             created_at: this.created_at
         };

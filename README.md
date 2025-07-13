@@ -203,6 +203,18 @@ Authorization: Bearer <seu_token_jwt>
 | GET | `/admin/economic-job/status` | Status da job econômica | Admin |
 | POST | `/admin/economic-job/execute` | Executar job manualmente (dev) | Admin |
 
+#### Eventos Políticos (v1.3.0)
+
+| Método | Endpoint | Descrição | Acesso |
+|--------|----------|-----------|--------|
+| POST | `/events/generate` | Gerar novo evento político | Privado |
+| GET | `/events/active` | Obter evento ativo do usuário | Privado |
+| POST | `/events/:eventId/decide` | Tomar decisão em um evento | Privado |
+| GET | `/events/history` | Obter histórico de eventos do usuário | Privado |
+| GET | `/events/statistics` | Obter estatísticas de eventos do usuário | Privado |
+| GET | `/events/system/status` | Verificar status do sistema de eventos | Privado |
+| POST | `/events/admin/expire` | Forçar expiração de eventos antigos (admin) | Privado |
+
 ### Exemplos de Uso
 
 #### Registrar usuário
@@ -285,6 +297,44 @@ curl -X GET http://localhost:3000/admin/economic-job/status
 #### Executar job manualmente (desenvolvimento)
 ```bash
 curl -X POST http://localhost:3000/admin/economic-job/execute
+```
+
+#### Gerar evento político
+```bash
+curl -X POST http://localhost:3000/api/events/generate \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Obter evento ativo
+```bash
+curl -X GET http://localhost:3000/api/events/active \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Tomar decisão em evento
+```bash
+curl -X POST http://localhost:3000/api/events/<eventId>/decide \
+  -H "Authorization: Bearer <seu_token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "option_id": 1, "reasoning": "Minha justificativa" }'
+```
+
+#### Histórico de eventos
+```bash
+curl -X GET http://localhost:3000/api/events/history \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Estatísticas de eventos
+```bash
+curl -X GET http://localhost:3000/api/events/statistics \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Status do sistema de eventos
+```bash
+curl -X GET http://localhost:3000/api/events/system/status \
+  -H "Authorization: Bearer <seu_token>"
 ```
 
 ## Segurança
@@ -438,7 +488,14 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - Supabase pela infraestrutura
 - Todos os contribuidores
 
-## 📈 Novas Features (v1.2.0)
+## 📈 Novas Features (v1.3.0)
+
+### 🗳️ Sistema de Eventos Políticos
+- **Geração de Eventos**: Criação dinâmica de eventos políticos para cada usuário
+- **Decisão do Jogador**: Usuário pode tomar decisões que afetam o estado
+- **Histórico e Estatísticas**: Consulta de histórico e análise de decisões
+- **Sistema Inteligente**: Status do sistema, cooldowns e controle de expiração
+- **Administração**: Forçar expiração de eventos antigos via endpoint admin
 
 ### 🏛️ Sistema de Estados
 - **Gerenciamento Completo**: Economia e governança integradas

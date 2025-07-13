@@ -93,13 +93,28 @@ class PoliticalEventController {
     };
 
     /**
-     * Verificar status do sistema de eventos
+     * Verificar status do sistema de eventos (CORRIGIDO)
      */
     getSystemStatus = async (req, res, next) => {
         try {
             const status = await this.eventService.checkAISystemStatus();
             
-            ResponseHelper.success(res, status, 'Status do sistema obtido com sucesso');
+            // Filtrar dados para evitar referências circulares
+            const safeStatus = {
+                llm_provider_available: status.llm_provider_available,
+                model_info: status.model_info ? {
+                    provider: status.model_info.provider,
+                    model: status.model_info.model,
+                    max_tokens: status.model_info.max_tokens,
+                    supports_json: status.model_info.supports_json,
+                    supports_streaming: status.model_info.supports_streaming
+                } : null,
+                agents_status: status.agents_status,
+                system_ready: status.system_ready,
+                error: status.error || null
+            };
+            
+            ResponseHelper.success(res, safeStatus, 'Status do sistema obtido com sucesso');
         } catch (error) {
             next(error);
         }

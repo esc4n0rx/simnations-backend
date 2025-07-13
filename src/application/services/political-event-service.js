@@ -391,51 +391,85 @@ class PoliticalEventService {
     }
 
     /**
-    * Obter histórico de eventos do usuário
-    * @param {string} userId - ID do usuário
-    * @param {number} limit - Limite de registros
-    * @returns {Promise<Array>} - Histórico de eventos
-    */
-   async getEventHistoryForUser(userId, limit = 10) {
-    const history = await this.eventRepository.findEventHistoryByUserId(userId, limit);
-    return history.map(event => event.toObject());
-}
+     * Obter histórico de eventos do usuário
+     * @param {string} userId - ID do usuário
+     * @param {number} limit - Limite de registros
+     * @returns {Promise<Array>} - Histórico de eventos
+     */
+    async getEventHistoryForUser(userId, limit = 10) {
+        const history = await this.eventRepository.findEventHistoryByUserId(userId, limit);
+        return history.map(event => event.toObject());
+    }
 
-/**
- * Forçar expiração de eventos antigos
- * @returns {Promise<number>} - Número de eventos expirados
- */
-async expireOldEvents() {
-    return await this.eventRepository.expireOldEvents();
-}
+    /**
+     * Forçar expiração de eventos antigos
+     * @returns {Promise<number>} - Número de eventos expirados
+     */
+    async expireOldEvents() {
+        return await this.eventRepository.expireOldEvents();
+    }
 
-/**
- * Verificar status do sistema de IA
- * @returns {Promise<Object>} - Status dos provedores
- */
-async checkAISystemStatus() {
-    try {
-        const isLLMAvailable = await this.llmProvider.isAvailable();
-        const modelInfo = this.llmProvider.getModelInfo();
+    /**
+     * Verificar status do sistema de IA (CORRIGIDO)
+     * @returns {Promise<Object>} - Status dos provedores
+     */
+    async checkAISystemStatus() {
+        try {
+            console.log('🔍 Verificando status do sistema de IA...');
+            
+            // Verificar disponibilidade do LLM sem retornar objetos circulares
+            let isLLMAvailable = false;
+            let llmError = null;
+            
+            try {
+                isLLMAvailable = await this.llmProvider.isAvailable();
+            } catch (error) {
+                llmError = error.message;
+                isLLMAvailable = false;
+            }
 
-        return {
-            llm_provider_available: isLLMAvailable,
-            model_info: modelInfo,
-            agents_status: {
+            // Obter informações seguras do modelo
+            const modelInfo = this.llmProvider.getModelInfo();
+
+            // Status dos agentes (verificação simples)
+            const agentsStatus = {
                 scenario_agent: !!this.scenarioAgent,
                 population_agent: !!this.populationAgent,
                 institutional_agent: !!this.institutionalAgent
-            },
-            system_ready: isLLMAvailable && this.scenarioAgent && this.populationAgent && this.institutionalAgent
-        };
-    } catch (error) {
-        return {
-            llm_provider_available: false,
-            error: error.message,
-            system_ready: false
-        };
+            };
+
+            const systemReady = isLLMAvailable && 
+                                agentsStatus.scenario_agent && 
+                                agentsStatus.population_agent && 
+                                agentsStatus.institutional_agent;
+
+            console.log(`✅ Status do sistema: ${systemReady ? 'Pronto' : 'Não disponível'}`);
+
+            return {
+                llm_provider_available: isLLMAvailable,
+                model_info: modelInfo, // Já filtrado no provider
+                agents_status: agentsStatus,
+                system_ready: systemReady,
+                error: llmError,
+                last_check: new Date().toISOString()
+            };
+
+        } catch (error) {
+            console.error('❌ Erro ao verificar status do sistema:', error);
+            return {
+                llm_provider_available: false,
+                model_info: null,
+                agents_status: {
+                    scenario_agent: false,
+                    population_agent: false,
+                    institutional_agent: false
+                },
+                system_ready: false,
+                error: error.message,
+                last_check: new Date().toISOString()
+            };
+        }
     }
-}
 }
 
 module.exports = PoliticalEventService;

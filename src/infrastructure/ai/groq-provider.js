@@ -113,7 +113,7 @@ Não inclua explicações, comentários ou texto adicional. Apenas o JSON.`;
     }
 
     /**
-     * Obter informações do modelo
+     * Obter informações do modelo (CORRIGIDO - sem referências circulares)
      * @returns {Object} - Informações do modelo
      */
     getModelInfo() {
@@ -121,8 +121,28 @@ Não inclua explicações, comentários ou texto adicional. Apenas o JSON.`;
             provider: 'Groq',
             model: this.model,
             max_tokens: LLM_SETTINGS.MAX_TOKENS,
+            temperature: LLM_SETTINGS.TEMPERATURE,
+            top_p: LLM_SETTINGS.TOP_P,
             supports_json: true,
-            supports_streaming: false // Para esta implementação
+            supports_streaming: false,
+            api_key_configured: !!process.env.GROQ_API_KEY
+        };
+    }
+
+    /**
+     * Obter status detalhado do provedor (NOVO)
+     * @returns {Object} - Status seguro para serialização
+     */
+    getSafeStatus() {
+        return {
+            provider_name: 'Groq',
+            model_name: this.model,
+            api_configured: !!process.env.GROQ_API_KEY,
+            settings: {
+                max_tokens: LLM_SETTINGS.MAX_TOKENS,
+                temperature: LLM_SETTINGS.TEMPERATURE,
+                top_p: LLM_SETTINGS.TOP_P
+            }
         };
     }
 }
