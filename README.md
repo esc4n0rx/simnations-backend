@@ -18,6 +18,8 @@ O **SimNations** é um jogo de simulação política onde os jogadores respondem
 - **Coletivismo**: Foco no bem comum vs. individualismo
 - **Influência**: Capacidade de diplomacia e relações internacionais
 
+Após completar o quiz, os jogadores recebem um estado real para gerenciar, com sistema completo de economia e governança que reflete suas escolhas políticas.
+
 ## Arquitetura
 
 O projeto segue uma arquitetura **Clean Architecture** com separação clara de responsabilidades:
@@ -40,6 +42,16 @@ src/
 └── shared/             # Utilitários compartilhados
     ├── constants/       # Constantes do sistema
     └── utils/          # Utilitários gerais
+```
+
+### 🏛️ **Sistema de Estados**
+
+O projeto agora inclui um sistema completo de gerenciamento de estados com:
+
+- **Economia Dinâmica**: PIB, população, dívida, desemprego, inflação
+- **Governança Política**: Aprovação, estabilidade, corrupção, risco de golpe
+- **Análise Inteligente**: Sistema de análise que identifica desafios e recomendações
+- **Reload de Estados**: Possibilidade de trocar de estado mantendo progresso
 ```
 
 ## Tecnologias
@@ -163,6 +175,18 @@ Authorization: Bearer <seu_token_jwt>
 | GET | `/quiz/state` | Obter estado atual do usuário | Privado |
 | POST | `/quiz/reload-state` | Recarregar estado do usuário | Privado |
 
+#### Estados
+
+| Método | Endpoint | Descrição | Acesso |
+|--------|----------|-----------|--------|
+| GET | `/state/data` | Obter dados completos do estado | Privado |
+| GET | `/state/economy` | Obter dados econômicos | Privado |
+| GET | `/state/governance` | Obter dados de governança | Privado |
+| GET | `/state/analysis` | Obter análise detalhada | Privado |
+| GET | `/state/summary` | Obter resumo executivo | Privado |
+| PUT | `/state/economy` | Atualizar dados econômicos | Privado |
+| PUT | `/state/governance` | Atualizar dados de governança | Privado |
+
 ### Exemplos de Uso
 
 #### Registrar usuário
@@ -199,6 +223,30 @@ curl -X POST http://localhost:3000/api/quiz/submit \
       {"question_id": 2, "answer_index": 1}
     ]
   }'
+```
+
+#### Obter dados do estado
+```bash
+curl -X GET http://localhost:3000/api/state/data \
+  -H "Authorization: Bearer <seu_token>"
+```
+
+#### Atualizar economia
+```bash
+curl -X PUT http://localhost:3000/api/state/economy \
+  -H "Authorization: Bearer <seu_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gdp": 1500000,
+    "unemployment_rate": 5.2,
+    "inflation_rate": 2.1
+  }'
+```
+
+#### Obter análise do estado
+```bash
+curl -X GET http://localhost:3000/api/state/analysis \
+  -H "Authorization: Bearer <seu_token>"
 ```
 
 ## Segurança
@@ -248,6 +296,32 @@ O sistema registra automaticamente:
 - Tentativas de autenticação
 - Performance de queries
 
+## 🏛️ Sistema de Estados
+
+### Economia
+O sistema de economia inclui:
+- **PIB e Crescimento**: Monitoramento do produto interno bruto
+- **População**: Crescimento demográfico e distribuição
+- **Dívida Pública**: Razão dívida/PIB e gestão fiscal
+- **Indicadores Sociais**: Desemprego, inflação, qualidade de vida
+- **Receitas e Despesas**: Balanço mensal e projeções
+
+### Governança
+O sistema de governança monitora:
+- **Aprovação Popular**: Níveis de apoio da população
+- **Estabilidade Política**: Risco de golpe e protestos
+- **Corrupção**: Índice de transparência e integridade
+- **Relações Internacionais**: Diplomacia e alianças
+- **Histórico de Decisões**: Taxa de sucesso das políticas
+
+### Análise Inteligente
+O sistema fornece:
+- **Análise Econômica**: Saúde financeira e projeções
+- **Análise Política**: Estabilidade e riscos
+- **Desafios Identificados**: Problemas críticos e urgentes
+- **Recomendações**: Sugestões de políticas e ações
+- **Resumo Executivo**: Visão geral para tomada de decisões
+
 ## Deploy
 
 ### Variáveis de Ambiente para Produção
@@ -257,7 +331,11 @@ NODE_ENV=production
 PORT=3000
 SUPABASE_URL=sua_url_producao
 SUPABASE_ANON_KEY=sua_chave_producao
+SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_producao
 JWT_SECRET=secret_super_seguro_producao
+JWT_EXPIRES_IN=24h
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 FRONTEND_URL=https://seu-frontend.com
 ```
 
@@ -297,6 +375,26 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - Comunidade open source
 - Supabase pela infraestrutura
 - Todos os contribuidores
+
+## 📈 Novas Features (v1.1.0)
+
+### 🏛️ Sistema de Estados
+- **Gerenciamento Completo**: Economia e governança integradas
+- **Análise Inteligente**: Sistema de análise automática de dados
+- **Reload de Estados**: Troca de estados mantendo progresso
+- **Resumo Executivo**: Visão geral para tomada de decisões
+
+### 📊 Indicadores Avançados
+- **Métricas Econômicas**: PIB, dívida, desemprego, inflação
+- **Indicadores Políticos**: Aprovação, estabilidade, risco de golpe
+- **Análise de Riscos**: Identificação automática de problemas
+- **Recomendações**: Sugestões baseadas em dados
+
+### 🔄 Funcionalidades Dinâmicas
+- **Atualização em Tempo Real**: Modificação de dados econômicos e políticos
+- **Validação Inteligente**: Schemas de validação para todas as operações
+- **Logs Detalhados**: Rastreamento completo de mudanças
+- **API RESTful**: Endpoints organizados e documentados
 
 ---
 
