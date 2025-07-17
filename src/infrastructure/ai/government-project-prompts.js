@@ -33,7 +33,7 @@ class GovernmentProjectPrompts {
             approvalRating
         });
         
-        return `Você é um assessor técnico governamental experiente. Transforme a ideia do governador em um projeto técnico oficial.
+        return `Você é um assessor técnico governamental experiente. Transforme a ideia do governador em um projeto técnico oficial , use somente Portugues Brasileiro em sua resposta.
 
 IDEIA DO GOVERNADOR: "${originalIdea}"
 

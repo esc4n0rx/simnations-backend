@@ -59,7 +59,7 @@ class GroqProvider {
                     }
                 ],
                 temperature: options.temperature || 0.7,
-                max_tokens: options.maxTokens || 2048,
+                max_tokens: options.max_tokens || options.maxTokens || 2048,
                 top_p: options.topP || 0.9,
                 stream: false
             };
@@ -105,7 +105,61 @@ class GroqProvider {
     }
 
     /**
-     * Gerar resposta JSON estruturada
+     * Gerar resposta estruturada (JSON) com schema específico
+     * @param {string} prompt - Prompt para o modelo
+     * @param {Object} schema - Schema esperado (não usado diretamente pela API Groq, mas para validação)
+     * @param {Object} options - Opções específicas
+     * @returns {Promise<Object>} - Objeto estruturado
+     */
+    async generateStructuredResponse(prompt, schema, options = {}) {
+        try {
+            console.log(`🤖 [Groq] Gerando resposta estruturada...`);
+            
+            // Adicionar instruções JSON ao prompt para forçar resposta estruturada
+            const structuredPrompt = `${prompt}
+
+IMPORTANTE: Responda APENAS com um JSON válido no formato especificado. Não inclua explicações adicionais ou texto fora do JSON.`;
+
+            const response = await this.generateResponse(structuredPrompt, {
+                ...options,
+                temperature: options.temperature || 0.3 // Menor temperatura para JSON mais consistente
+            });
+
+            // Tentar extrair JSON da resposta
+            let jsonStr = response;
+            
+            // Procurar JSON entre blocos de código
+            const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) {
+                jsonStr = jsonMatch[1];
+            } else {
+                // Procurar JSON simples que comece com { e termine com }
+                const simpleJsonMatch = response.match(/\{[\s\S]*\}/);
+                if (simpleJsonMatch) {
+                    jsonStr = simpleJsonMatch[0];
+                }
+            }
+
+            try {
+                const parsedResponse = JSON.parse(jsonStr);
+                console.log(`✅ [Groq] Resposta estruturada parseada com sucesso`);
+                return parsedResponse;
+            } catch (parseError) {
+                console.error('❌ [Groq] Erro ao parsear JSON:', {
+                    response: response.substring(0, 500) + '...',
+                    parseError: parseError.message
+                });
+                throw new Error('Resposta da IA não é um JSON válido');
+            }
+
+        } catch (error) {
+            console.error('❌ [Groq] Erro na geração de resposta estruturada:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Gerar resposta JSON estruturada (método legado)
      * @param {string} prompt - Prompt para a IA
      * @param {Object} options - Opções de configuração
      * @returns {Promise<Object>} - Resposta JSON parseada
@@ -146,6 +200,33 @@ class GroqProvider {
             console.error('❌ [Groq] Erro na geração de JSON:', error);
             throw error;
         }
+    }
+
+    /**
+     * Verificar se o provedor está disponível
+     * @returns {Promise<boolean>} - True se disponível
+     */
+    async isAvailable() {
+        try {
+            return await this.testConnection();
+        } catch (error) {
+            console.error('❌ [Groq] Provedor indisponível:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Obter informações do modelo
+     * @returns {Object} - Informações do modelo
+     */
+    getModelInfo() {
+        return {
+            provider: 'Groq',
+            model: this.model,
+            maxTokens: 8192,
+            supportsJSON: true,
+            apiConfigured: !!this.apiKey
+        };
     }
 }
 
