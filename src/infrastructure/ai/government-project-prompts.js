@@ -230,6 +230,63 @@ INSTRUÇÕES:
 
 Responda como se fosse um comentário real de redes sociais ou pesquisa de opinião pública.`;
     }
+
+    static getResponseSchemas() {
+        return {
+            refinement: {
+                status: 'approved' | 'rejected',
+                rejection_reason: 'string|null',
+                name: 'string',
+                objective: 'string',
+                description: 'string',
+                justification: 'string',
+                target_population: 'string',
+                expected_impacts: {
+                    economic: ['string'],
+                    social: ['string']
+                },
+                project_type: 'string'
+            },
+            analysis: {
+                implementation_cost: 'number',
+                execution_method: 'string',
+                installments_config: {
+                    number_of_installments: 'number',
+                    installment_amount: 'number',
+                    payment_frequency: 'string'
+                },
+                estimated_duration_months: 'number',
+                technical_feasibility: 'string',
+                required_resources: ['string'],
+                potential_risks: [
+                    {
+                        risk: 'string',
+                        probability: 'string',
+                        impact: 'string'
+                    }
+                ],
+                economic_return_projection: {
+                    revenue_increase_monthly: 'number',
+                    cost_savings_monthly: 'number',
+                    payback_period_months: 'number'
+                },
+                social_impact_projection: {
+                    population_directly_impacted: 'number',
+                    quality_of_life_improvement: 'string',
+                    employment_generation: 'number'
+                }
+            },
+            population: {
+                narrative_response: 'string',
+                impacts: {
+                    approval_rating: 'number',
+                    protest_level: 'number',
+                    unemployment_perception: 'number',
+                    inflation_perception: 'number'
+                }
+            }
+        };
+    }
 }
 
 module.exports = GovernmentProjectPrompts;
