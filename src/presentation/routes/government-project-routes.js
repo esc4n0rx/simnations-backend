@@ -1,7 +1,7 @@
 const express = require('express');
 const GovernmentProjectController = require('../controllers/government-project-controller');
-const authMiddleware = require('../middlewares/auth-middleware');
-const validationMiddleware = require('../middlewares/validation-middleware');
+const authMiddleware = require('../middleware/auth-middleware');
+const validationMiddleware = require('../middleware/validation-middleware');
 const { body, param, query } = require('express-validator');
 
 const router = express.Router();

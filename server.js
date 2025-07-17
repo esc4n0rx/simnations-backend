@@ -13,7 +13,7 @@ const userRoutes = require('./src/presentation/routes/user-routes');
 const quizRoutes = require('./src/presentation/routes/quiz-routes');
 const stateRoutes = require('./src/presentation/routes/state-routes');
 const politicalEventRoutes = require('./src/presentation/routes/political-event-routes');
-const governmentProjectRoutes = require('./src/presentation/government-project-routes');
+const governmentProjectRoutes = require('./src/presentation/routes/government-project-routes');
 
 // Importar utils
 const { testConnection } = require('./src/infrastructure/database/supabase-client');
