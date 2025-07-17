@@ -57,9 +57,7 @@ const debugExpressValidator = (req, res, next) => {
         console.log(`📍 Has errors: ${!errors.isEmpty()}`);
         
         if (!errors.isEmpty()) {
-            console.log(`❌ [EXPRESS-VALIDATOR] VALIDATION ERRORS FOUND:`);
-            console.log(`📍 Errors: ${JSON.stringify(errors.array(), null, 2)}`);
-            console.log(`${'='.repeat(80)}`);
+            console.log(`❌ Validation errors:`, JSON.stringify(errors.array(), null, 2));
             
             return res.status(400).json({
                 success: false,
@@ -69,59 +67,48 @@ const debugExpressValidator = (req, res, next) => {
             });
         }
         
-        console.log(`✅ [EXPRESS-VALIDATOR] NO VALIDATION ERRORS`);
+        console.log(`✅ Validation passed`);
         console.log(`${'='.repeat(80)}`);
     }
-    
-    // [CORRIGIDO] Para rotas PUT também verificar validação
-    if (['PUT'].includes(req.method) && req.params.projectId) {
-        const errors = validationResult(req);
-        
-        if (!errors.isEmpty()) {
-            console.log(`❌ [EXPRESS-VALIDATOR] VALIDATION ERRORS FOR ${req.method} ${req.path}:`);
-            console.log(`📍 Errors: ${JSON.stringify(errors.array(), null, 2)}`);
-            
-            return res.status(400).json({
-                success: false,
-                message: 'Dados inválidos',
-                errors: errors.array(),
-                timestamp: new Date().toISOString()
-            });
-        }
-    }
-    
     next();
 };
 
-// Validações usando express-validator (não Zod)
+// Validações
+
+// Validação para criação de projeto
 const createProjectValidation = [
     body('original_idea')
-        .isString()
-        .withMessage('Ideia deve ser uma string')
-        .trim()
-        .isLength({ min: 10, max: 1000 })
-        .withMessage('Ideia deve ter entre 10 e 1000 caracteres'),
-    debugExpressValidator  // Usar nosso middleware de debug em vez do validationMiddleware
+        .notEmpty()
+        .withMessage('Ideia original é obrigatória')
+        .isLength({ min: 10, max: 2000 })
+        .withMessage('Ideia deve ter entre 10 e 2000 caracteres')
+        .trim(),
+    debugExpressValidator
 ];
 
-// [CORRIGIDO] Validação para UUID em vez de inteiro
+// Validação para parâmetros de projeto
 const projectIdValidation = [
     param('projectId')
-        .isUUID(4)
+        .isUUID()
         .withMessage('ID do projeto deve ser um UUID válido'),
     debugExpressValidator
 ];
 
+// Validação para rejeição de projeto
 const rejectProjectValidation = [
-    ...projectIdValidation,
+    param('projectId')
+        .isUUID()
+        .withMessage('ID do projeto deve ser um UUID válido'),
     body('reason')
-        .isString()
-        .trim()
-        .isLength({ min: 5, max: 500 })
-        .withMessage('Motivo deve ter entre 5 e 500 caracteres'),
+        .notEmpty()
+        .withMessage('Motivo da rejeição é obrigatório')
+        .isLength({ min: 10, max: 500 })
+        .withMessage('Motivo deve ter entre 10 e 500 caracteres')
+        .trim(),
     debugExpressValidator
 ];
 
+// Validação para listagem de projetos
 const listProjectsValidation = [
     query('status')
         .optional()
@@ -163,15 +150,16 @@ router.use((req, res, next) => {
  * @desc Criar nova ideia de projeto
  * @access Private
  */
+// Na seção da rota POST, trocar:
 router.post('/', createProjectValidation, (req, res, next) => {
     console.log(`\n🚀 [ROUTE DEBUG] POST ROUTE HANDLER STARTED`);
-    console.log(`📍 About to call controller.createProjectIdea`);
+    console.log(`📍 About to call controller.createProject`); // <- CORRIGIDO
     console.log(`📍 Request user: ${JSON.stringify(req.user)}`);
     console.log(`📍 Request body: ${JSON.stringify(req.body)}`);
     console.log(`${'='.repeat(80)}`);
     
     try {
-        controller.createProjectIdea(req, res, next);
+        controller.createProject(req, res, next); // <- CORRIGIDO
     } catch (error) {
         console.log(`❌ [ROUTE DEBUG] ERROR IN ROUTE HANDLER: ${error.message}`);
         next(error);

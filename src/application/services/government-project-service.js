@@ -39,20 +39,16 @@ class GovernmentProjectService {
                 throw new Error('A ideia do projeto deve ter pelo menos 10 caracteres');
             }
 
-            // Obter dados do usuário e estado
-            const userData = await this.stateRepository.getUserById(userId);
-            if (!userData) {
-                throw new Error('Usuário não encontrado');
-            }
-
-            const stateData = await this.stateRepository.getStateByUserId(userId);
+            // Obter dados completos do estado do usuário
+            const stateData = await this.stateRepository.findCompleteStateDataByUserId(userId);
             if (!stateData) {
                 throw new Error('Estado do usuário não encontrado');
             }
 
             debugLogger.logStep('DATA_LOADED', {
-                userExists: !!userData,
                 stateExists: !!stateData,
+                economyExists: !!stateData.economy,
+                governanceExists: !!stateData.governance,
                 stateId: stateData.state_info?.id
             });
 
@@ -118,41 +114,46 @@ class GovernmentProjectService {
                 throw new Error('Projeto não encontrado');
             }
 
-            // Verificar se pode ser aprovado
-            if (!project.canBeApproved()) {
-                throw new Error('Projeto não pode ser aprovado no estado atual');
+            // Verificar se o projeto pertence ao usuário
+            if (project.user_id !== userId) {
+                throw new Error('Acesso negado. Este projeto não pertence ao usuário');
+            }
+
+            // Verificar se o projeto está em status que pode ser aprovado
+            if (project.status !== PROJECT_STATUS.PENDING_APPROVAL) {
+                throw new Error('O projeto não está em status para aprovação');
             }
 
             // Obter dados do estado para processos
-            const stateData = await this.stateRepository.getStateByUserId(userId);
+            const stateData = await this.stateRepository.findCompleteStateDataByUserId(userId);
             if (!stateData) {
                 throw new Error('Estado do usuário não encontrado');
             }
 
-            // Aprovar projeto
-            project.approve();
+            // Atualizar status para aprovado
+            project.status = PROJECT_STATUS.APPROVED;
+            project.approved_at = new Date();
             
-            // [CORRIGIDO] Iniciar execução do projeto
-            project.start();
-            
-            // Salvar mudanças
-            const updatedProject = await this.projectRepository.update(projectId, project);
-            
-            // [CORRIGIDO] Gerar reação da população em background
-            this.generatePopulationReactionSafely(updatedProject, stateData)
+            const approvedProject = await this.projectRepository.update(projectId, project);
+
+            // Gerar reação da população em background
+            this.generatePopulationReactionSafely(approvedProject, stateData)
                 .catch(error => {
                     console.error(`❌ [BACKGROUND] Erro ao gerar reação da população para projeto ${projectId}:`, error);
                 });
 
-            // [CORRIGIDO] Agendar execuções do projeto
-            await this.scheduleProjectExecutions(updatedProject);
+            // Agendar execuções em background
+            this.scheduleProjectExecutions(approvedProject)
+                .catch(error => {
+                    console.error(`❌ [BACKGROUND] Erro ao agendar execuções para projeto ${projectId}:`, error);
+                });
 
             console.log(`✅ Projeto ${projectId} aprovado com sucesso`);
 
             return {
                 success: true,
-                project: updatedProject.toObject(),
-                message: 'Projeto aprovado e execução iniciada'
+                project: approvedProject.toObject(),
+                message: 'Projeto aprovado e agendado para execução'
             };
 
         } catch (error) {
@@ -162,20 +163,21 @@ class GovernmentProjectService {
     }
 
     /**
-     * [NOVO] Gerar reação da população de forma segura
+     * Gerar reação da população (em background)
      * @param {GovernmentProjectEntity} project - Projeto aprovado
-     * @param {Object} stateData - Dados do estado
+     * @param {Object} stateData - Dados completos do estado
      */
     async generatePopulationReactionSafely(project, stateData) {
         try {
             console.log(`👥 Gerando reação da população para projeto ${project.id}...`);
 
+            // Gerar reação da população usando o serviço
             const populationReaction = await this.populationService.generatePopulationReaction(
                 project.toObject(),
                 stateData
             );
-
-            // Atualizar projeto com a reação
+            
+            // Adicionar reação ao projeto
             project.setPopulationReaction(populationReaction);
             
             // Salvar no banco
@@ -227,6 +229,8 @@ class GovernmentProjectService {
      * Processar refinamento com tratamento de erro seguro - VERSÃO CORRIGIDA
      */
     async processProjectRefinementSafely(projectId, stateData) {
+        const debugLogger = new DebugLogger('REFINEMENT_SAFE');
+        
         try {
             debugLogger.logStep('REFINEMENT_SAFE_START', {
                 projectId,
@@ -290,7 +294,7 @@ class GovernmentProjectService {
             // Executar refinamento (Agente 1)
             debugLogger.logStep('REFINEMENT_START', { projectId });
             const refinedProject = await TimeoutHelper.withTimeout(
-                () => this.refinementService.refineProject(project.original_idea, stateData),
+                () => this.refinementService.refineProjectIdea(project.original_idea, stateData), // <- CORRIGIDO: era refineProject
                 30000 // 30 segundos
             );
 
@@ -375,7 +379,7 @@ class GovernmentProjectService {
 
             // Verificar se o projeto pertence ao usuário
             if (project.user_id !== userId) {
-                throw new Error('Acesso negado ao projeto');
+                throw new Error('Acesso negado. Este projeto não pertence ao usuário');
             }
 
             return {
@@ -394,121 +398,48 @@ class GovernmentProjectService {
     /**
      * Rejeitar projeto
      * @param {string} projectId - ID do projeto
-     * @param {string} reason - Motivo da rejeição
      * @param {string} userId - ID do usuário
+     * @param {string} reason - Motivo da rejeição
      * @returns {Promise<Object>}
      */
-    async rejectProject(projectId, reason, userId) {
+    async rejectProject(projectId, userId, reason) {
         try {
             console.log(`❌ Rejeitando projeto ${projectId}...`);
 
+            // Buscar projeto
             const project = await this.projectRepository.findById(projectId);
             if (!project) {
                 throw new Error('Projeto não encontrado');
             }
 
+            // Verificar se o projeto pertence ao usuário
             if (project.user_id !== userId) {
-                throw new Error('Acesso negado ao projeto');
+                throw new Error('Acesso negado. Este projeto não pertence ao usuário');
             }
 
-            project.reject(reason);
-            const updatedProject = await this.projectRepository.update(projectId, project);
+            // Verificar se o projeto está em status que pode ser rejeitado
+            if (![PROJECT_STATUS.PENDING_APPROVAL, PROJECT_STATUS.DRAFT].includes(project.status)) {
+                throw new Error('O projeto não está em status para rejeição');
+            }
 
-            console.log(`✅ Projeto ${projectId} rejeitado`);
+            // Atualizar status para rejeitado
+            project.status = PROJECT_STATUS.REJECTED;
+            project.rejection_reason = reason;
+            project.rejected_at = new Date();
+            
+            const rejectedProject = await this.projectRepository.update(projectId, project);
+
+            console.log(`✅ Projeto ${projectId} rejeitado com sucesso`);
 
             return {
                 success: true,
-                project: updatedProject.toObject(),
+                project: rejectedProject.toObject(),
                 message: 'Projeto rejeitado'
             };
 
         } catch (error) {
             console.error('❌ Erro ao rejeitar projeto:', error);
             throw new Error(`Falha ao rejeitar projeto: ${error.message}`);
-        }
-    }
-
-    /**
-     * Cancelar projeto
-     * @param {string} projectId - ID do projeto
-     * @param {string} reason - Motivo do cancelamento
-     * @param {string} userId - ID do usuário
-     * @returns {Promise<Object>}
-     */
-    async cancelProject(projectId, reason, userId) {
-        try {
-            console.log(`🚫 Cancelando projeto ${projectId}...`);
-
-            const project = await this.projectRepository.findById(projectId);
-            if (!project) {
-                throw new Error('Projeto não encontrado');
-            }
-
-            if (project.user_id !== userId) {
-                throw new Error('Acesso negado ao projeto');
-            }
-
-            project.cancel(reason);
-            const updatedProject = await this.projectRepository.update(projectId, project);
-
-            console.log(`✅ Projeto ${projectId} cancelado`);
-
-            return {
-                success: true,
-                project: updatedProject.toObject(),
-                message: 'Projeto cancelado'
-            };
-
-        } catch (error) {
-            console.error('❌ Erro ao cancelar projeto:', error);
-            throw new Error(`Falha ao cancelar projeto: ${error.message}`);
-        }
-    }
-
-    /**
-     * Obter estatísticas de execução (admin)
-     * @returns {Promise<Object>}
-     */
-    async getExecutionStats() {
-        try {
-            return await this.executionService.getExecutionStats();
-        } catch (error) {
-            console.error('❌ Erro ao obter estatísticas:', error);
-            throw new Error(`Falha ao obter estatísticas: ${error.message}`);
-        }
-    }
-
-    /**
-     * Executar job manualmente (admin)
-     * @returns {Promise<Object>}
-     */
-    async executeJobManually() {
-        try {
-            return await this.executionService.executeJobManually();
-        } catch (error) {
-            console.error('❌ Erro ao executar job:', error);
-            throw new Error(`Falha ao executar job: ${error.message}`);
-        }
-    }
-
-    /**
-     * Obter execuções pendentes (admin)
-     * @param {number} limit - Limite de resultados
-     * @returns {Promise<Object>}
-     */
-    async getPendingExecutions(limit = 50) {
-        try {
-            const executions = await this.executionService.getPendingExecutions(limit);
-            return {
-                success: true,
-                data: {
-                    executions,
-                    total: executions.length
-                }
-            };
-        } catch (error) {
-            console.error('❌ Erro ao buscar execuções pendentes:', error);
-            throw new Error(`Falha ao buscar execuções: ${error.message}`);
         }
     }
 }

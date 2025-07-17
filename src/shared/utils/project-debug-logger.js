@@ -1,8 +1,9 @@
 /**
  * Logger específico para debug de criação de projetos
  */
-class ProjectDebugLogger {
-    constructor() {
+class DebugLogger {
+    constructor(context = 'DEFAULT') {
+        this.context = context;
         this.isDebugMode = process.env.NODE_ENV === 'development' || process.env.PROJECT_DEBUG === 'true';
         this.currentSession = null;
     }
@@ -47,6 +48,7 @@ class ProjectDebugLogger {
             status,
             timestamp: timestamp.toISOString(),
             sessionId: this.currentSession?.id,
+            context: this.context,
             data
         };
 
@@ -57,7 +59,7 @@ class ProjectDebugLogger {
         const emoji = this.getEmoji(status);
         const stepName = step.replace(/_/g, ' ').toUpperCase();
         
-        console.log(`\n${emoji} [PROJECT DEBUG] ${stepName} - ${status}`);
+        console.log(`\n${emoji} [${this.context}] ${stepName} - ${status}`);
         console.log(`📅 Timestamp: ${timestamp.toISOString()}`);
         console.log(`🆔 Session: ${this.currentSession?.id || 'N/A'}`);
         
@@ -117,7 +119,7 @@ class ProjectDebugLogger {
 
         const duration = new Date() - this.currentSession.startTime;
         
-        console.log(`\n🏁 [PROJECT DEBUG] SESSÃO FINALIZADA`);
+        console.log(`\n🏁 [${this.context}] SESSÃO FINALIZADA`);
         console.log(`🆔 Session ID: ${this.currentSession.id}`);
         console.log(`👤 User ID: ${this.currentSession.userId}`);
         console.log(`⏱️  Duração total: ${duration}ms`);
@@ -182,7 +184,7 @@ class ProjectDebugLogger {
     log(message, data = {}) {
         if (!this.isDebugMode) return;
         
-        console.log(`\n🔍 [PROJECT DEBUG] ${message}`);
+        console.log(`\n🔍 [${this.context}] ${message}`);
         if (Object.keys(data).length > 0) {
             console.log(JSON.stringify(data, null, 2));
         }
@@ -190,7 +192,61 @@ class ProjectDebugLogger {
     }
 }
 
-// Instância singleton
-const debugLogger = new ProjectDebugLogger();
+/**
+ * Helper para gerenciar timeouts em operações assíncronas
+ */
+class TimeoutHelper {
+    /**
+     * Executa uma função com timeout
+     * @param {Function} fn - Função a ser executada
+     * @param {number} timeoutMs - Timeout em milissegundos
+     * @param {string} operation - Nome da operação para logs
+     * @returns {Promise} - Promise com timeout
+     */
+    static withTimeout(fn, timeoutMs = 30000, operation = 'operação') {
+        return Promise.race([
+            typeof fn === 'function' ? fn() : fn,
+            new Promise((_, reject) => {
+                setTimeout(() => {
+                    reject(new Error(`Timeout de ${timeoutMs}ms excedido para ${operation}`));
+                }, timeoutMs);
+            })
+        ]);
+    }
 
-module.exports = debugLogger;
+    /**
+     * Executa função assíncrona com retry
+     * @param {Function} fn - Função assíncrona
+     * @param {number} maxRetries - Número máximo de tentativas
+     * @param {number} delay - Delay entre tentativas (ms)
+     * @returns {Promise} - Resultado da função
+     */
+    static async withRetry(fn, maxRetries = 3, delay = 1000) {
+        let lastError;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (error) {
+                lastError = error;
+                console.warn(`❌ Tentativa ${attempt}/${maxRetries} falhou:`, error.message);
+                
+                if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, delay * attempt));
+                }
+            }
+        }
+        
+        throw lastError;
+    }
+}
+
+// Instância singleton para uso global
+const debugLogger = new DebugLogger('PROJECT_DEBUG');
+
+// Exportar tanto as classes quanto a instância singleton
+module.exports = {
+    DebugLogger,
+    TimeoutHelper,
+    debugLogger
+};

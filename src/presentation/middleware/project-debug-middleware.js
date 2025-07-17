@@ -1,4 +1,4 @@
-const debugLogger = require('../../shared/utils/project-debug-logger');
+const { debugLogger } = require('../../shared/utils/project-debug-logger');
 
 /**
  * Middleware específico para debug de criação de projetos
