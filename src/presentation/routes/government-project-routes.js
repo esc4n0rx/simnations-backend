@@ -2,29 +2,95 @@ const express = require('express');
 const GovernmentProjectController = require('../controllers/government-project-controller');
 const authMiddleware = require('../middleware/auth-middleware');
 const validationMiddleware = require('../middleware/validation-middleware');
-const { body, param, query } = require('express-validator');
+const projectDebugMiddleware = require('../middleware/project-debug-middleware');
+const superDebugMiddleware = require('../middleware/super-debug-middleware');
+const { body, param, query, validationResult } = require('express-validator');
 
 const router = express.Router();
 const controller = new GovernmentProjectController();
 
+// DEBUG: Middleware ultra-verboso PRIMEIRO
+router.use(superDebugMiddleware);
+
+// Log antes da autenticação
+router.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/') {
+        console.log(`\n🔐 [AUTH DEBUG] BEFORE AUTH MIDDLEWARE`);
+        console.log(`📍 Headers: ${JSON.stringify(req.headers, null, 2)}`);
+        console.log(`${'='.repeat(80)}`);
+    }
+    next();
+});
+
 // Aplicar autenticação em todas as rotas
 router.use(authMiddleware);
 
-// Validações
+// Log depois da autenticação
+router.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/') {
+        console.log(`\n✅ [AUTH DEBUG] AFTER AUTH MIDDLEWARE`);
+        console.log(`📍 User: ${JSON.stringify(req.user, null, 2)}`);
+        console.log(`${'='.repeat(80)}`);
+    }
+    next();
+});
+
+// Aplicar middleware de debug específico para criação de projetos
+router.use(projectDebugMiddleware);
+
+// Log antes da validação
+router.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/') {
+        console.log(`\n🔍 [VALIDATION DEBUG] BEFORE VALIDATION`);
+        console.log(`📍 Body: ${JSON.stringify(req.body, null, 2)}`);
+        console.log(`${'='.repeat(80)}`);
+    }
+    next();
+});
+
+// Middleware personalizado para debug do express-validator
+const debugExpressValidator = (req, res, next) => {
+    if (req.method === 'POST' && req.path === '/') {
+        console.log(`\n🔍 [EXPRESS-VALIDATOR DEBUG] CHECKING VALIDATION RESULT`);
+        
+        const errors = validationResult(req);
+        console.log(`📍 Has errors: ${!errors.isEmpty()}`);
+        
+        if (!errors.isEmpty()) {
+            console.log(`❌ [EXPRESS-VALIDATOR] VALIDATION ERRORS FOUND:`);
+            console.log(`📍 Errors: ${JSON.stringify(errors.array(), null, 2)}`);
+            console.log(`${'='.repeat(80)}`);
+            
+            return res.status(400).json({
+                success: false,
+                message: 'Dados inválidos',
+                errors: errors.array(),
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        console.log(`✅ [EXPRESS-VALIDATOR] NO VALIDATION ERRORS`);
+        console.log(`${'='.repeat(80)}`);
+    }
+    next();
+};
+
+// Validações usando express-validator (não Zod)
 const createProjectValidation = [
     body('original_idea')
         .isString()
+        .withMessage('Ideia deve ser uma string')
         .trim()
         .isLength({ min: 10, max: 1000 })
         .withMessage('Ideia deve ter entre 10 e 1000 caracteres'),
-    validationMiddleware
+    debugExpressValidator  // Usar nosso middleware de debug em vez do validationMiddleware
 ];
 
 const projectIdValidation = [
     param('projectId')
         .isInt({ min: 1 })
         .withMessage('ID do projeto deve ser um número inteiro positivo'),
-    validationMiddleware
+    debugExpressValidator
 ];
 
 const rejectProjectValidation = [
@@ -34,7 +100,7 @@ const rejectProjectValidation = [
         .trim()
         .isLength({ min: 5, max: 500 })
         .withMessage('Motivo deve ter entre 5 e 500 caracteres'),
-    validationMiddleware
+    debugExpressValidator
 ];
 
 const listProjectsValidation = [
@@ -58,17 +124,40 @@ const listProjectsValidation = [
         .optional()
         .isIn(['ASC', 'DESC'])
         .withMessage('Direção de ordenação deve ser ASC ou DESC'),
-    validationMiddleware
+    debugExpressValidator
 ];
 
-// Rotas principais dos projetos
+// Log antes do controller
+router.use((req, res, next) => {
+    if (req.method === 'POST' && req.path === '/') {
+        console.log(`\n🎯 [CONTROLLER DEBUG] ABOUT TO REACH CONTROLLER`);
+        console.log(`📍 All middleware passed successfully`);
+        console.log(`📍 User: ${req.user?.id}`);
+        console.log(`📍 Body: ${JSON.stringify(req.body)}`);
+        console.log(`${'='.repeat(80)}`);
+    }
+    next();
+});
 
 /**
  * @route POST /api/government-projects
  * @desc Criar nova ideia de projeto
  * @access Private
  */
-router.post('/', createProjectValidation, controller.createProjectIdea);
+router.post('/', createProjectValidation, (req, res, next) => {
+    console.log(`\n🚀 [ROUTE DEBUG] POST ROUTE HANDLER STARTED`);
+    console.log(`📍 About to call controller.createProjectIdea`);
+    console.log(`📍 Request user: ${JSON.stringify(req.user)}`);
+    console.log(`📍 Request body: ${JSON.stringify(req.body)}`);
+    console.log(`${'='.repeat(80)}`);
+    
+    try {
+        controller.createProjectIdea(req, res, next);
+    } catch (error) {
+        console.log(`❌ [ROUTE DEBUG] ERROR IN ROUTE HANDLER: ${error.message}`);
+        next(error);
+    }
+});
 
 /**
  * @route GET /api/government-projects
@@ -158,7 +247,7 @@ router.get('/admin/search', [
         .optional()
         .isInt({ min: 1, max: 100 })
         .withMessage('Limite deve estar entre 1 e 100'),
-    validationMiddleware
+    debugExpressValidator
 ], controller.searchProjects);
 
 module.exports = router;

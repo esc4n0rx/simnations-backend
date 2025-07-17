@@ -1,50 +1,181 @@
 const GovernmentProjectService = require('../../application/services/government-project-service');
 const ProjectExecutionService = require('../../application/services/project-execution-service');
 const ResponseHelper = require('../../shared/helpers/response-helper');
+const TimeoutHelper = require('../../shared/utils/timeout-helper');
+const debugLogger = require('../../shared/utils/project-debug-logger');
 const { PROJECT_STATUS } = require('../../shared/constants/government-project-constants');
 
 class GovernmentProjectController {
     constructor() {
         this.projectService = new GovernmentProjectService();
         this.executionService = new ProjectExecutionService();
+        console.log(`🏗️ [CONTROLLER DEBUG] GovernmentProjectController constructed`);
     }
 
     /**
-     * Criar nova ideia de projeto
+     * Criar nova ideia de projeto - VERSÃO ULTRA DEBUG
      */
     createProjectIdea = async (req, res, next) => {
+        console.log(`\n🚀 [CONTROLLER] createProjectIdea METHOD STARTED`);
+        console.log(`📍 Timestamp: ${new Date().toISOString()}`);
+        console.log(`📍 Request received`);
+        console.log(`${'='.repeat(80)}`);
+        
+        let sessionId = null;
+        
         try {
-            const userId = req.user.id;
-            const { original_idea } = req.body;
+            console.log(`\n🔍 [CONTROLLER] EXTRACTING DATA FROM REQUEST`);
+            
+            const userId = req.user?.id;
+            const { original_idea } = req.body || {};
 
-            // Validar entrada
+            console.log(`📍 User ID: ${userId}`);
+            console.log(`📍 Original Idea: ${original_idea}`);
+            console.log(`📍 Request User Object: ${JSON.stringify(req.user, null, 2)}`);
+            console.log(`📍 Request Body: ${JSON.stringify(req.body, null, 2)}`);
+            console.log(`${'='.repeat(80)}`);
+
+            if (!userId) {
+                console.log(`❌ [CONTROLLER] USER ID NOT FOUND`);
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
+            if (!original_idea) {
+                console.log(`❌ [CONTROLLER] ORIGINAL IDEA NOT FOUND`);
+                return ResponseHelper.badRequest(res, 'Ideia do projeto é obrigatória');
+            }
+
+            console.log(`\n✅ [CONTROLLER] BASIC VALIDATION PASSED`);
+            console.log(`${'='.repeat(80)}`);
+
+            // Iniciar sessão de debug
+            sessionId = debugLogger.startSession(userId, original_idea);
+            debugLogger.logStep('CONTROLLER_START', {
+                userId,
+                ideaLength: original_idea?.length,
+                userAgent: req.headers['user-agent']
+            }, 'START');
+
+            console.log(`\n🔍 [CONTROLLER] DETAILED VALIDATION START`);
+
+            // Validações básicas
+            debugLogger.logStep('VALIDATION_START', {}, 'START');
+            
             if (!original_idea || original_idea.trim().length === 0) {
+                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Empty idea`);
+                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia vazia' }, 'ERROR');
+                debugLogger.endSession('VALIDATION_ERROR');
                 return ResponseHelper.badRequest(res, 'Ideia do projeto é obrigatória');
             }
 
             if (original_idea.length < 10) {
+                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Idea too short: ${original_idea.length}`);
+                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia muito curta', length: original_idea.length }, 'ERROR');
+                debugLogger.endSession('VALIDATION_ERROR');
                 return ResponseHelper.badRequest(res, 'Ideia muito curta. Forneça mais detalhes sobre sua proposta');
             }
 
             if (original_idea.length > 1000) {
+                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Idea too long: ${original_idea.length}`);
+                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia muito longa', length: original_idea.length }, 'ERROR');
+                debugLogger.endSession('VALIDATION_ERROR');
                 return ResponseHelper.badRequest(res, 'Ideia muito longa. Seja mais conciso em sua proposta');
             }
 
-            const result = await this.projectService.createProjectIdea(userId, original_idea);
+            console.log(`✅ [CONTROLLER] DETAILED VALIDATION PASSED`);
+            debugLogger.logSuccess('VALIDATION_COMPLETE', { ideaLength: original_idea.length });
+
+            console.log(`\n🔧 [CONTROLLER] CALLING SERVICE`);
+            console.log(`📍 About to call this.callServiceWithDebug`);
+            console.log(`${'='.repeat(80)}`);
+
+            // Chamar service com timeout e debug
+            debugLogger.logStep('SERVICE_CALL_START', {}, 'START');
+            
+            const result = await TimeoutHelper.withTimeout(
+                this.callServiceWithDebug(userId, original_idea, sessionId),
+                45000,
+                'criação de projeto'
+            );
+
+            console.log(`✅ [CONTROLLER] SERVICE CALL COMPLETED`);
+            console.log(`📍 Result: ${JSON.stringify(result, null, 2)}`);
+            console.log(`${'='.repeat(80)}`);
+
+            debugLogger.logSuccess('SERVICE_CALL_COMPLETE', { 
+                success: result.success,
+                projectId: result.project?.id 
+            });
 
             if (!result.success) {
+                console.log(`❌ [CONTROLLER] SERVICE FAILED`);
+                debugLogger.logStep('SERVICE_FAILED', { error: result.error }, 'ERROR');
+                debugLogger.endSession('SERVICE_ERROR');
                 return ResponseHelper.badRequest(res, result.error, result.details);
             }
 
+            console.log(`\n📤 [CONTROLLER] PREPARING RESPONSE`);
+            debugLogger.logStep('RESPONSE_PREPARE', {
+                projectId: result.project.id,
+                message: result.message
+            }, 'START');
+
+            debugLogger.endSession('SUCCESS');
+            
+            console.log(`✅ [CONTROLLER] SENDING RESPONSE`);
+            console.log(`${'='.repeat(80)}`);
+            
             ResponseHelper.created(res, result.project, result.message);
+
         } catch (error) {
+            console.log(`\n❌ [CONTROLLER] ERROR CAUGHT`);
+            console.log(`📍 Error: ${error.message}`);
+            console.log(`📍 Stack: ${error.stack}`);
+            console.log(`${'='.repeat(80)}`);
+            
+            debugLogger.logError('CONTROLLER_ERROR', error, {
+                userId: req.user?.id,
+                sessionId
+            });
+            debugLogger.endSession('CONTROLLER_ERROR');
+
+            if (error.message.includes('Timeout')) {
+                return ResponseHelper.error(res, 'O processamento está demorando mais que o esperado. Tente novamente em alguns minutos.', 408);
+            }
+
             next(error);
         }
     };
 
     /**
-     * Listar projetos do usuário
+     * Chamar service com debug detalhado
      */
+    async callServiceWithDebug(userId, originalIdea, sessionId) {
+        console.log(`\n🔧 [CONTROLLER] callServiceWithDebug STARTED`);
+        console.log(`📍 User ID: ${userId}`);
+        console.log(`📍 Session ID: ${sessionId}`);
+        console.log(`${'='.repeat(80)}`);
+        
+        debugLogger.logStep('SERVICE_METHOD_START', {
+            method: 'createProjectIdea',
+            sessionId
+        }, 'START');
+
+        const result = await this.projectService.createProjectIdea(userId, originalIdea);
+
+        console.log(`✅ [CONTROLLER] callServiceWithDebug COMPLETED`);
+        console.log(`${'='.repeat(80)}`);
+
+        debugLogger.logStep('SERVICE_METHOD_COMPLETE', {
+            success: result.success,
+            hasProject: !!result.project,
+            sessionId
+        }, 'SUCCESS');
+
+        return result;
+    }
+
+    // Outros métodos permanecem iguais...
     getUserProjects = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -72,9 +203,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Obter projeto específico
-     */
     getProjectById = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -95,9 +223,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Obter projetos pendentes de aprovação
-     */
     getPendingProjects = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -113,9 +238,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Aprovar projeto
-     */
     approveProject = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -143,9 +265,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Rejeitar projeto
-     */
     rejectProject = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -174,9 +293,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Cancelar projeto
-     */
     cancelProject = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -205,9 +321,6 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Verificar status do sistema de IA
-     */
     getSystemStatus = async (req, res, next) => {
         try {
             const status = await this.projectService.checkSystemStatus();
@@ -218,11 +331,6 @@ class GovernmentProjectController {
         }
     };
 
-    // Endpoints administrativos
-
-    /**
-     * Executar job de projetos manualmente (desenvolvimento)
-     */
     executeProjectJob = async (req, res, next) => {
         try {
             const result = await this.executionService.executeJobManually();
@@ -230,19 +338,16 @@ class GovernmentProjectController {
             if (result.success) {
                 ResponseHelper.success(res, result, 'Job executada com sucesso');
             } else {
-                ResponseHelper.serverError(res, result.error);
+                ResponseHelper.error(res, result.error || 'Falha na execução da job', 500);
             }
         } catch (error) {
             next(error);
         }
     };
 
-    /**
-     * Obter estatísticas de execução
-     */
     getExecutionStats = async (req, res, next) => {
         try {
-            const stats = await this.executionService.getExecutionStats();
+            const stats = await this.executionService.getExecutionStatistics();
             
             ResponseHelper.success(res, stats, 'Estatísticas obtidas com sucesso');
         } catch (error) {
@@ -250,49 +355,24 @@ class GovernmentProjectController {
         }
     };
 
-    /**
-     * Obter execuções pendentes
-     */
     getPendingExecutions = async (req, res, next) => {
         try {
-            const { limit = 50 } = req.query;
+            const pending = await this.executionService.getPendingExecutions();
             
-            const executions = await this.executionService.getPendingExecutions(parseInt(limit));
-            
-            ResponseHelper.success(res, { 
-                executions,
-                total: executions.length 
-            }, 'Execuções pendentes obtidas');
+            ResponseHelper.success(res, pending, 'Execuções pendentes obtidas');
         } catch (error) {
             next(error);
         }
     };
 
-    /**
-     * Buscar projetos com filtros avançados (admin)
-     */
     searchProjects = async (req, res, next) => {
         try {
-            const filters = {
-                userId: req.query.user_id,
-                stateId: req.query.state_id,
-                status: req.query.status,
-                projectType: req.query.project_type,
-                startDate: req.query.start_date,
-                endDate: req.query.end_date,
-                search: req.query.search,
-                page: parseInt(req.query.page) || 1,
-                limit: parseInt(req.query.limit) || 20,
-                orderBy: req.query.order_by || 'created_at',
-                orderDirection: req.query.order_direction || 'DESC'
-            };
-
-            const result = await this.projectService.projectRepository.findWithFilters(filters);
+            const userId = req.user.id;
+            const searchParams = req.query;
             
-            ResponseHelper.success(res, {
-                projects: result.projects.map(project => project.toObject()),
-                pagination: result.pagination
-            }, 'Busca realizada com sucesso');
+            const results = await this.projectService.searchProjects(userId, searchParams);
+            
+            ResponseHelper.success(res, results, 'Busca realizada com sucesso');
         } catch (error) {
             next(error);
         }

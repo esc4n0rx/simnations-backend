@@ -8,19 +8,42 @@ class GovernmentProjectPrompts {
      * @returns {string}
      */
     static generateRefinementPrompt(originalIdea, stateData) {
-        const { state_info, economy, governance } = stateData;
+        console.log('🔍 [PROMPTS] Gerando prompt de refinamento...');
+        console.log('📊 [PROMPTS] Dados recebidos:', JSON.stringify(stateData, null, 2));
+        
+        // Extrair dados com validação e valores padrão
+        const stateInfo = stateData.state_info || {};
+        const economy = stateData.economy || {};
+        const governance = stateData.governance || {};
+        
+        // Valores seguros com fallbacks
+        const stateName = stateInfo.state || 'Estado não informado';
+        const population = stateInfo.population || 1000000;
+        const gdp = economy.gdp || 1000000000;
+        const treasuryBalance = economy.treasury_balance || 50000000;
+        const unemploymentRate = economy.unemployment_rate || 8.5;
+        const approvalRating = governance.approval_rating || 50.0;
+        
+        console.log('✅ [PROMPTS] Dados processados:', {
+            stateName,
+            population,
+            gdp,
+            treasuryBalance,
+            unemploymentRate,
+            approvalRating
+        });
         
         return `Você é um assessor técnico governamental experiente. Transforme a ideia do governador em um projeto técnico oficial.
 
 IDEIA DO GOVERNADOR: "${originalIdea}"
 
 CONTEXTO DO ESTADO:
-- Estado: ${state_info.state}
-- População: ${state_info.population.toLocaleString()} habitantes
-- PIB: R$ ${economy.gdp.toLocaleString()}
-- Tesouro: R$ ${economy.treasury_balance.toLocaleString()}
-- Taxa de Desemprego: ${economy.unemployment_rate}%
-- Aprovação do Governo: ${governance.approval_rating.toFixed(1)}%
+- Estado: ${stateName}
+- População: ${population.toLocaleString()} habitantes
+- PIB: R$ ${gdp.toLocaleString()}
+- Tesouro: R$ ${treasuryBalance.toLocaleString()}
+- Taxa de Desemprego: ${unemploymentRate}%
+- Aprovação do Governo: ${approvalRating.toFixed(1)}%
 
 REGRAS OBRIGATÓRIAS:
 1. REJEITE automaticamente ideias que envolvam:
@@ -64,29 +87,50 @@ RESPONDA APENAS COM JSON VÁLIDO:
     }
 
     /**
-     * Prompt para o Agente de Análise (Agente 2)
+     * Prompt para o Agente de Análise (Agente 2) - VERSÃO CORRIGIDA
      * @param {Object} refinedProject - Projeto refinado
      * @param {Object} stateData - Dados do estado
      * @returns {string}
      */
     static generateAnalysisPrompt(refinedProject, stateData) {
-        const { economy, governance } = stateData;
+        console.log('🔍 [PROMPTS] Gerando prompt de análise...');
+        
+        // Extrair dados com validação
+        const economy = stateData.economy || {};
+        const stateInfo = stateData.state_info || {};
+        
+        // Valores seguros
+        const treasuryBalance = economy.treasury_balance || 50000000;
+        const gdp = economy.gdp || 1000000000;
+        const taxRate = economy.tax_rate || 15;
+        const publicDebt = economy.public_debt || 200000000;
+        const population = stateInfo.population || 1000000;
+        
+        // Calcular receita mensal estimada
+        const monthlyRevenue = (gdp * taxRate / 100 / 12);
+        
+        console.log('✅ [PROMPTS] Dados de análise processados:', {
+            treasuryBalance,
+            gdp,
+            taxRate,
+            monthlyRevenue: monthlyRevenue.toFixed(0)
+        });
         
         return `Você é um consultor especializado em viabilidade de projetos públicos. Analise tecnicamente este projeto.
 
 PROJETO A ANALISAR:
-Nome: ${refinedProject.name}
-Objetivo: ${refinedProject.objective}
-Tipo: ${refinedProject.project_type}
-Descrição: ${refinedProject.description}
+Nome: ${refinedProject.name || 'Projeto sem nome'}
+Objetivo: ${refinedProject.objective || 'Objetivo não definido'}
+Tipo: ${refinedProject.project_type || 'infrastructure'}
+Descrição: ${refinedProject.description || 'Descrição não disponível'}
 
 CONTEXTO FINANCEIRO DO ESTADO:
-- Tesouro Disponível: R$ ${economy.treasury_balance.toLocaleString()}
-- PIB: R$ ${economy.gdp.toLocaleString()}
-- Taxa de Impostos: ${economy.tax_rate}%
-- Receita Mensal Estimada: R$ ${(economy.gdp * economy.tax_rate / 100 / 12).toFixed(0)}
-- Dívida Pública: R$ ${economy.public_debt.toLocaleString()}
-- População: ${stateData.state_info.population.toLocaleString()}
+- Tesouro Disponível: R$ ${treasuryBalance.toLocaleString()}
+- PIB: R$ ${gdp.toLocaleString()}
+- Taxa de Impostos: ${taxRate}%
+- Receita Mensal Estimada: R$ ${monthlyRevenue.toFixed(0)}
+- Dívida Pública: R$ ${publicDebt.toLocaleString()}
+- População: ${population.toLocaleString()}
 
 INSTRUÇÕES:
 1. Analise a viabilidade técnica e financeira
@@ -138,29 +182,43 @@ RESPONDA APENAS COM JSON VÁLIDO:
     }
 
     /**
-     * Prompt para o Agente de Reação Popular (Agente 3)
+     * Prompt para o Agente de Reação Popular (Agente 3) - VERSÃO CORRIGIDA
      * @param {Object} projectData - Dados completos do projeto
      * @param {Object} stateData - Dados do estado
      * @returns {string}
      */
     static generatePopulationPrompt(projectData, stateData) {
-        const { refined_project, analysis_data } = projectData;
-        const { economy, governance } = stateData;
+        console.log('🔍 [PROMPTS] Gerando prompt de reação popular...');
         
-        return `Você é a voz coletiva da população do estado ${stateData.state_info.state}. Reaja à aprovação deste projeto governamental.
+        const { refined_project, analysis_data } = projectData;
+        const economy = stateData.economy || {};
+        const governance = stateData.governance || {};
+        const stateInfo = stateData.state_info || {};
+        
+        // Valores seguros
+        const approvalRating = governance.approval_rating || 50.0;
+        const unemploymentRate = economy.unemployment_rate || 8.5;
+        const treasuryBalance = economy.treasury_balance || 50000000;
+        const population = stateInfo.population || 1000000;
+        const implementationCost = analysis_data?.implementation_cost || 1000000;
+        const estimatedDuration = analysis_data?.estimated_duration_months || 12;
+        
+        console.log('✅ [PROMPTS] Dados de reação popular processados');
+        
+        return `Você é a voz coletiva da população do estado ${stateInfo.state || 'Brasil'}. Reaja à aprovação deste projeto governamental.
 
 PROJETO APROVADO:
-Nome: ${refined_project.name}
-Objetivo: ${refined_project.objective}
-Custo: R$ ${analysis_data.implementation_cost.toLocaleString()}
-Duração: ${analysis_data.estimated_duration_months} meses
-Tipo: ${refined_project.project_type}
+Nome: ${refined_project?.name || 'Projeto Governamental'}
+Objetivo: ${refined_project?.objective || 'Melhorar serviços públicos'}
+Custo: R$ ${implementationCost.toLocaleString()}
+Duração: ${estimatedDuration} meses
+Tipo: ${refined_project?.project_type || 'infrastructure'}
 
 CONTEXTO DA POPULAÇÃO:
-- Aprovação do Governo: ${governance.approval_rating.toFixed(1)}%
-- Desemprego: ${economy.unemployment_rate}%
-- Situação do Tesouro: ${economy.treasury_balance > 0 ? 'Positiva' : 'Crítica'}
-- População Total: ${stateData.state_info.population.toLocaleString()}
+- Aprovação do Governo: ${approvalRating.toFixed(1)}%
+- Desemprego: ${unemploymentRate}%
+- Situação do Tesouro: ${treasuryBalance > 0 ? 'Positiva' : 'Crítica'}
+- População Total: ${population.toLocaleString()}
 
 INSTRUÇÕES:
 1. Reaja como cidadão comum brasileiro, usando linguagem coloquial
@@ -170,87 +228,7 @@ INSTRUÇÕES:
 5. Máximo 250 palavras, linguagem natural e emocional
 6. Inclua reações de diferentes setores (empresários, trabalhadores, etc.)
 
-RESPONDA APENAS COM JSON VÁLIDO:
-{
-  "public_opinion": "Reação principal da população (250 palavras máximo)",
-  "sector_reactions": [
-    {
-      "sector": "Empresários locais",
-      "reaction": "Reação específica do setor"
-    },
-    {
-      "sector": "Trabalhadores",
-      "reaction": "Reação específica do setor"
-    },
-    {
-      "sector": "Estudantes",
-      "reaction": "Reação específica do setor"
-    }
-  ],
-  "approval_impact": -5.0,
-  "protest_level": 0,
-  "media_coverage": "positive" | "neutral" | "negative"
-}`;
-    }
-
-    /**
-     * Obter schemas de resposta para validação
-     * @returns {Object}
-     */
-    static getResponseSchemas() {
-        return {
-            refinement: {
-                status: "approved",
-                rejection_reason: null,
-                name: "string",
-                objective: "string", 
-                description: "string",
-                justification: "string",
-                target_population: "string",
-                expected_impacts: {
-                    economic: ["string"],
-                    social: ["string"]
-                },
-                project_type: "string"
-            },
-            analysis: {
-                implementation_cost: 0,
-                execution_method: "string",
-                installments_config: {
-                    number_of_installments: 0,
-                    installment_amount: 0,
-                    payment_frequency: "string"
-                },
-                estimated_duration_months: 0,
-                technical_feasibility: "string",
-                required_resources: ["string"],
-                potential_risks: [{
-                    risk: "string",
-                    probability: "string",
-                    impact: "string"
-                }],
-                economic_return_projection: {
-                    revenue_increase_monthly: 0,
-                    cost_savings_monthly: 0,
-                    payback_period_months: 0
-                },
-                social_impact_projection: {
-                    population_directly_impacted: 0,
-                    quality_of_life_improvement: "string",
-                    employment_generation: 0
-                }
-            },
-            population: {
-                public_opinion: "string",
-                sector_reactions: [{
-                    sector: "string",
-                    reaction: "string"
-                }],
-                approval_impact: 0,
-                protest_level: 0,
-                media_coverage: "string"
-            }
-        };
+Responda como se fosse um comentário real de redes sociais ou pesquisa de opinião pública.`;
     }
 }
 

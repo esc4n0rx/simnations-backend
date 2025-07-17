@@ -1,149 +1,151 @@
-const Groq = require('groq-sdk');
-const LLMProvider = require('./llm-provider');
-const { LLM_SETTINGS } = require('../../shared/constants/political-event-constants');
+const axios = require('axios');
 
-class GroqProvider extends LLMProvider {
+class GroqProvider {
     constructor() {
-        super();
-        this.client = new Groq({
-            apiKey: process.env.GROQ_API_KEY
-        });
-        this.model = process.env.GROQ_MODEL || LLM_SETTINGS.DEFAULT_MODEL;
+        this.apiKey = process.env.GROQ_API_KEY;
+        this.baseURL = 'https://api.groq.com/openai/v1';
+        this.model = 'llama3-70b-8192';
+        
+        if (!this.apiKey) {
+            console.warn('⚠️ GROQ_API_KEY não configurada');
+        }
     }
 
     /**
-     * Gerar resposta do LLM
-     * @param {string} prompt - Prompt para o modelo
-     * @param {Object} options - Opções específicas
-     * @returns {Promise<string>} - Resposta gerada
+     * Testar conexão com a API
+     * @returns {Promise<boolean>} - Status da conexão
+     */
+    async testConnection() {
+        try {
+            if (!this.apiKey) {
+                return false;
+            }
+
+            const response = await axios.get(`${this.baseURL}/models`, {
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 5000
+            });
+
+            return response.status === 200;
+        } catch (error) {
+            console.error('❌ Erro ao testar conexão com Groq:', error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Gerar resposta da IA
+     * @param {string} prompt - Prompt para a IA
+     * @param {Object} options - Opções de configuração
+     * @returns {Promise<string>} - Resposta da IA
      */
     async generateResponse(prompt, options = {}) {
         try {
-            const response = await this.client.chat.completions.create({
+            if (!this.apiKey) {
+                throw new Error('GROQ_API_KEY não configurada');
+            }
+
+            console.log(`🤖 [Groq] Enviando prompt para IA...`);
+            
+            const requestData = {
+                model: options.model || this.model,
                 messages: [
                     {
                         role: 'user',
                         content: prompt
                     }
                 ],
-                model: this.model,
-                max_tokens: options.max_tokens || LLM_SETTINGS.MAX_TOKENS,
-                temperature: options.temperature || LLM_SETTINGS.TEMPERATURE,
-                top_p: options.top_p || LLM_SETTINGS.TOP_P,
+                temperature: options.temperature || 0.7,
+                max_tokens: options.maxTokens || 2048,
+                top_p: options.topP || 0.9,
                 stream: false
+            };
+
+            const response = await axios.post(
+                `${this.baseURL}/chat/completions`,
+                requestData,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: options.timeout || 30000
+                }
+            );
+
+            if (!response.data?.choices?.[0]?.message?.content) {
+                throw new Error('Resposta inválida da IA');
+            }
+
+            const aiResponse = response.data.choices[0].message.content.trim();
+            console.log(`✅ [Groq] Resposta recebida (${aiResponse.length} caracteres)`);
+            
+            return aiResponse;
+
+        } catch (error) {
+            console.error('❌ [Groq] Erro na geração de resposta:', {
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data
             });
 
-            return response.choices[0]?.message?.content || '';
-        } catch (error) {
-            console.error('❌ Erro no Groq Provider:', error);
-            throw new Error(`Falha na geração de resposta: ${error.message}`);
+            if (error.response?.status === 429) {
+                throw new Error('Limite de taxa excedido na API da Groq');
+            } else if (error.response?.status === 401) {
+                throw new Error('Chave de API da Groq inválida');
+            } else if (error.code === 'ECONNABORTED') {
+                throw new Error('Timeout na conexão com a API da Groq');
+            }
+
+            throw new Error(`Erro na API da Groq: ${error.message}`);
         }
     }
 
     /**
-     * Gerar resposta estruturada (JSON)
-     * @param {string} prompt - Prompt para o modelo
-     * @param {Object} schema - Schema esperado (não usado no Groq, apenas validação)
-     * @param {Object} options - Opções específicas
-     * @returns {Promise<Object>} - Objeto estruturado
+     * Gerar resposta JSON estruturada
+     * @param {string} prompt - Prompt para a IA
+     * @param {Object} options - Opções de configuração
+     * @returns {Promise<Object>} - Resposta JSON parseada
      */
-    async generateStructuredResponse(prompt, schema, options = {}) {
+    async generateJSONResponse(prompt, options = {}) {
         try {
-            // Adicionar instruções para JSON no prompt
-            const jsonPrompt = `${prompt}
+            const response = await this.generateResponse(prompt, {
+                ...options,
+                temperature: 0.3 // Menor temperatura para JSON mais consistente
+            });
 
-IMPORTANTE: Responda APENAS com um JSON válido seguindo exatamente este formato:
-${JSON.stringify(schema, null, 2)}
-
-Não inclua explicações, comentários ou texto adicional. Apenas o JSON.`;
-
-            const response = await this.generateResponse(jsonPrompt, options);
-            
             // Tentar extrair JSON da resposta
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('Resposta não contém JSON válido');
-            }
-
-            const parsedResponse = JSON.parse(jsonMatch[0]);
+            let jsonStr = response;
             
-            // Validação básica do schema (opcional)
-            this.validateResponseSchema(parsedResponse, schema);
-            
-            return parsedResponse;
+            // Procurar JSON entre blocos de código
+            const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) {
+                jsonStr = jsonMatch[1];
+            } else {
+                // Procurar JSON simples
+                const simpleJsonMatch = response.match(/\{[\s\S]*\}/);
+                if (simpleJsonMatch) {
+                    jsonStr = simpleJsonMatch[0];
+                }
+            }
+
+            try {
+                return JSON.parse(jsonStr);
+            } catch (parseError) {
+                console.error('❌ [Groq] Erro ao parsear JSON:', {
+                    response: response.substring(0, 500),
+                    parseError: parseError.message
+                });
+                throw new Error('Resposta da IA não é um JSON válido');
+            }
+
         } catch (error) {
-            console.error('❌ Erro na resposta estruturada:', error);
-            throw new Error(`Falha na geração de resposta estruturada: ${error.message}`);
+            console.error('❌ [Groq] Erro na geração de JSON:', error);
+            throw error;
         }
-    }
-
-    /**
-     * Validação básica do schema de resposta
-     * @param {Object} response - Resposta recebida
-     * @param {Object} schema - Schema esperado
-     */
-    validateResponseSchema(response, schema) {
-        const requiredKeys = Object.keys(schema);
-        const responseKeys = Object.keys(response);
-        
-        for (const key of requiredKeys) {
-            if (!responseKeys.includes(key)) {
-                console.warn(`⚠️ Campo obrigatório ausente: ${key}`);
-            }
-        }
-    }
-
-    /**
-     * Verificar se o provedor está disponível
-     * @returns {Promise<boolean>} - True se disponível
-     */
-    async isAvailable() {
-        try {
-            if (!process.env.GROQ_API_KEY) {
-                return false;
-            }
-
-            // Teste simples de conectividade
-            await this.generateResponse('Test', { max_tokens: 10 });
-            return true;
-        } catch (error) {
-            console.error('❌ Groq Provider indisponível:', error.message);
-            return false;
-        }
-    }
-
-    /**
-     * Obter informações do modelo (CORRIGIDO - sem referências circulares)
-     * @returns {Object} - Informações do modelo
-     */
-    getModelInfo() {
-        return {
-            provider: 'Groq',
-            model: this.model,
-            max_tokens: LLM_SETTINGS.MAX_TOKENS,
-            temperature: LLM_SETTINGS.TEMPERATURE,
-            top_p: LLM_SETTINGS.TOP_P,
-            supports_json: true,
-            supports_streaming: false,
-            api_key_configured: !!process.env.GROQ_API_KEY
-        };
-    }
-
-    /**
-     * Obter status detalhado do provedor (NOVO)
-     * @returns {Object} - Status seguro para serialização
-     */
-    getSafeStatus() {
-        return {
-            provider_name: 'Groq',
-            model_name: this.model,
-            api_configured: !!process.env.GROQ_API_KEY,
-            settings: {
-                max_tokens: LLM_SETTINGS.MAX_TOKENS,
-                temperature: LLM_SETTINGS.TEMPERATURE,
-                top_p: LLM_SETTINGS.TOP_P
-            }
-        };
     }
 }
 
