@@ -13,6 +13,14 @@ class GovernmentProjectController {
     }
 
     /**
+     * [CORRIGIDO] Função para validar UUID
+     */
+    isValidUUID(str) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(str);
+    }
+
+    /**
      * Criar nova ideia de projeto - VERSÃO ULTRA DEBUG
      */
     createProjectIdea = async (req, res, next) => {
@@ -175,7 +183,7 @@ class GovernmentProjectController {
         return result;
     }
 
-    // Outros métodos permanecem iguais...
+    // [CORRIGIDO] Outros métodos com validação UUID
     getUserProjects = async (req, res, next) => {
         try {
             const userId = req.user.id;
@@ -208,11 +216,13 @@ class GovernmentProjectController {
             const userId = req.user.id;
             const { projectId } = req.params;
 
-            if (!projectId || isNaN(projectId)) {
+            // [CORRIGIDO] Validação UUID em vez de número
+            if (!projectId || !this.isValidUUID(projectId)) {
                 return ResponseHelper.badRequest(res, 'ID do projeto inválido');
             }
 
-            const result = await this.projectService.getProjectById(userId, parseInt(projectId));
+            // [CORRIGIDO] Não fazer parseInt do UUID
+            const result = await this.projectService.getProjectById(userId, projectId);
             
             ResponseHelper.success(res, result.project, 'Projeto obtido com sucesso');
         } catch (error) {
@@ -243,11 +253,13 @@ class GovernmentProjectController {
             const userId = req.user.id;
             const { projectId } = req.params;
 
-            if (!projectId || isNaN(projectId)) {
+            // [CORRIGIDO] Validação UUID em vez de número
+            if (!projectId || !this.isValidUUID(projectId)) {
                 return ResponseHelper.badRequest(res, 'ID do projeto inválido');
             }
 
-            const result = await this.projectService.approveProject(userId, parseInt(projectId));
+            // [CORRIGIDO] Não fazer parseInt do UUID
+            const result = await this.projectService.approveProject(userId, projectId);
 
             if (!result.success) {
                 return ResponseHelper.badRequest(res, result.error, result);
@@ -271,7 +283,8 @@ class GovernmentProjectController {
             const { projectId } = req.params;
             const { reason } = req.body;
 
-            if (!projectId || isNaN(projectId)) {
+            // [CORRIGIDO] Validação UUID em vez de número
+            if (!projectId || !this.isValidUUID(projectId)) {
                 return ResponseHelper.badRequest(res, 'ID do projeto inválido');
             }
 
@@ -279,7 +292,8 @@ class GovernmentProjectController {
                 return ResponseHelper.badRequest(res, 'Motivo da rejeição é obrigatório');
             }
 
-            const result = await this.projectService.rejectProject(userId, parseInt(projectId), reason);
+            // [CORRIGIDO] Não fazer parseInt do UUID
+            const result = await this.projectService.rejectProject(userId, projectId, reason);
 
             ResponseHelper.success(res, result.project, result.message);
         } catch (error) {
@@ -299,7 +313,8 @@ class GovernmentProjectController {
             const { projectId } = req.params;
             const { reason } = req.body;
 
-            if (!projectId || isNaN(projectId)) {
+            // [CORRIGIDO] Validação UUID em vez de número
+            if (!projectId || !this.isValidUUID(projectId)) {
                 return ResponseHelper.badRequest(res, 'ID do projeto inválido');
             }
 
@@ -307,7 +322,8 @@ class GovernmentProjectController {
                 return ResponseHelper.badRequest(res, 'Motivo do cancelamento é obrigatório');
             }
 
-            const result = await this.projectService.cancelProject(userId, parseInt(projectId), reason);
+            // [CORRIGIDO] Não fazer parseInt do UUID
+            const result = await this.projectService.cancelProject(userId, projectId, reason);
 
             ResponseHelper.success(res, result.project, result.message);
         } catch (error) {
@@ -323,7 +339,8 @@ class GovernmentProjectController {
 
     getSystemStatus = async (req, res, next) => {
         try {
-            const status = await this.projectService.checkSystemStatus();
+            // [CORRIGIDO] Método correto do service
+            const status = await this.projectService.getSystemStatus();
             
             ResponseHelper.success(res, status, 'Status do sistema obtido');
         } catch (error) {
@@ -333,6 +350,7 @@ class GovernmentProjectController {
 
     executeProjectJob = async (req, res, next) => {
         try {
+            // [CORRIGIDO] Método correto do service
             const result = await this.executionService.executeJobManually();
             
             if (result.success) {
@@ -347,7 +365,8 @@ class GovernmentProjectController {
 
     getExecutionStats = async (req, res, next) => {
         try {
-            const stats = await this.executionService.getExecutionStatistics();
+            // [CORRIGIDO] Método correto do service
+            const stats = await this.executionService.getExecutionStats();
             
             ResponseHelper.success(res, stats, 'Estatísticas obtidas com sucesso');
         } catch (error) {
@@ -357,6 +376,7 @@ class GovernmentProjectController {
 
     getPendingExecutions = async (req, res, next) => {
         try {
+            // [CORRIGIDO] Método correto do service
             const pending = await this.executionService.getPendingExecutions();
             
             ResponseHelper.success(res, pending, 'Execuções pendentes obtidas');

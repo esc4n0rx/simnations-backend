@@ -72,6 +72,24 @@ const debugExpressValidator = (req, res, next) => {
         console.log(`✅ [EXPRESS-VALIDATOR] NO VALIDATION ERRORS`);
         console.log(`${'='.repeat(80)}`);
     }
+    
+    // [CORRIGIDO] Para rotas PUT também verificar validação
+    if (['PUT'].includes(req.method) && req.params.projectId) {
+        const errors = validationResult(req);
+        
+        if (!errors.isEmpty()) {
+            console.log(`❌ [EXPRESS-VALIDATOR] VALIDATION ERRORS FOR ${req.method} ${req.path}:`);
+            console.log(`📍 Errors: ${JSON.stringify(errors.array(), null, 2)}`);
+            
+            return res.status(400).json({
+                success: false,
+                message: 'Dados inválidos',
+                errors: errors.array(),
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+    
     next();
 };
 
@@ -86,10 +104,11 @@ const createProjectValidation = [
     debugExpressValidator  // Usar nosso middleware de debug em vez do validationMiddleware
 ];
 
+// [CORRIGIDO] Validação para UUID em vez de inteiro
 const projectIdValidation = [
     param('projectId')
-        .isInt({ min: 1 })
-        .withMessage('ID do projeto deve ser um número inteiro positivo'),
+        .isUUID(4)
+        .withMessage('ID do projeto deve ser um UUID válido'),
     debugExpressValidator
 ];
 
