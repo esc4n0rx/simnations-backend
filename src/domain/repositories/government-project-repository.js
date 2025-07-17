@@ -1,14 +1,10 @@
-const { Op } = require('sequelize');
+const { supabase } = require('../../infrastructure/database/supabase-client');
 const GovernmentProjectEntity = require('../entities/government-project-entity');
 const { PROJECT_STATUS, SYSTEM_LIMITS } = require('../../shared/constants/government-project-constants');
 
 class GovernmentProjectRepository {
     constructor() {
-        // Importar models dinamicamente para evitar dependências circulares
-        this.GovernmentProject = require('../../infrastructure/database/models').GovernmentProject;
-        this.ProjectExecution = require('../../infrastructure/database/models').ProjectExecution;
-        this.User = require('../../infrastructure/database/models').User;
-        this.State = require('../../infrastructure/database/models').State;
+        // Usar Supabase ao invés de Sequelize
     }
 
     /**
@@ -35,8 +31,18 @@ class GovernmentProjectRepository {
                 processing_logs: projectEntity.processing_logs
             };
 
-            const createdProject = await this.GovernmentProject.create(projectData);
-            return new GovernmentProjectEntity(createdProject.toJSON());
+            const { data, error } = await supabase
+                .from('government_projects')
+                .insert([projectData])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('❌ Erro ao criar projeto:', error);
+                throw new Error(`Falha ao criar projeto: ${error.message}`);
+            }
+
+            return new GovernmentProjectEntity(data);
         } catch (error) {
             console.error('❌ Erro ao criar projeto:', error);
             throw new Error(`Falha ao criar projeto: ${error.message}`);
@@ -50,162 +56,85 @@ class GovernmentProjectRepository {
      */
     async findById(projectId) {
         try {
-            const project = await this.GovernmentProject.findByPk(projectId, {
-                include: [
-                    {
-                        model: this.User,
-                        as: 'user',
-                        attributes: ['id', 'email', 'name']
-                    },
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ]
-            });
+            const { data, error } = await supabase
+                .from('government_projects')
+                .select(`
+                    *,
+                    user:users!user_id (
+                        id,
+                        email,
+                        name
+                    ),
+                    state:states!state_id (
+                        id,
+                        name,
+                        acronym
+                    )
+                `)
+                .eq('id', projectId)
+                .single();
 
-            return project ? new GovernmentProjectEntity(project.toJSON()) : null;
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return null;
+                }
+                throw new Error(`Erro ao buscar projeto: ${error.message}`);
+            }
+
+            return new GovernmentProjectEntity(data);
         } catch (error) {
             console.error('❌ Erro ao buscar projeto por ID:', error);
-            throw new Error(`Falha ao buscar projeto: ${error.message}`);
+            throw error;
         }
     }
 
     /**
-     * Buscar projetos do usuário
+     * Buscar projetos por usuário
      * @param {number} userId - ID do usuário
-     * @param {Object} options - Opções de busca
+     * @param {Object} filters - Filtros opcionais
      * @returns {Promise<Array<GovernmentProjectEntity>>} - Lista de projetos
      */
-    async findByUserId(userId, options = {}) {
+    async findByUserId(userId, filters = {}) {
         try {
-            const {
-                status = null,
-                limit = 20,
-                offset = 0,
-                orderBy = 'created_at',
-                orderDirection = 'DESC'
-            } = options;
+            let query = supabase
+                .from('government_projects')
+                .select(`
+                    *,
+                    user:users!user_id (
+                        id,
+                        email,
+                        name
+                    ),
+                    state:states!state_id (
+                        id,
+                        name,
+                        acronym
+                    )
+                `)
+                .eq('user_id', userId);
 
-            const whereClause = { user_id: userId };
-            if (status) {
-                whereClause.status = status;
+            // Aplicar filtros
+            if (filters.status) {
+                query = query.eq('status', filters.status);
             }
 
-            const projects = await this.GovernmentProject.findAll({
-                where: whereClause,
-                include: [
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ],
-                limit,
-                offset,
-                order: [[orderBy, orderDirection]]
-            });
-
-            return projects.map(project => new GovernmentProjectEntity(project.toJSON()));
-        } catch (error) {
-            console.error('❌ Erro ao buscar projetos do usuário:', error);
-            throw new Error(`Falha ao buscar projetos: ${error.message}`);
-        }
-    }
-
-    /**
-     * Buscar projetos ativos do usuário
-     * @param {number} userId - ID do usuário
-     * @returns {Promise<Array<GovernmentProjectEntity>>} - Projetos ativos
-     */
-    async findActiveProjectsByUserId(userId) {
-        try {
-            const activeStatuses = [
-                PROJECT_STATUS.PENDING_APPROVAL,
-                PROJECT_STATUS.APPROVED,
-                PROJECT_STATUS.IN_EXECUTION
-            ];
-
-            const projects = await this.GovernmentProject.findAll({
-                where: {
-                    user_id: userId,
-                    status: {
-                        [Op.in]: activeStatuses
-                    }
-                },
-                include: [
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ],
-                order: [['created_at', 'DESC']]
-            });
-
-            return projects.map(project => new GovernmentProjectEntity(project.toJSON()));
-        } catch (error) {
-            console.error('❌ Erro ao buscar projetos ativos:', error);
-            throw new Error(`Falha ao buscar projetos ativos: ${error.message}`);
-        }
-    }
-
-    /**
-     * Buscar projetos pendentes de aprovação
-     * @param {number} userId - ID do usuário
-     * @returns {Promise<Array<GovernmentProjectEntity>>} - Projetos pendentes
-     */
-    async findPendingApprovalByUserId(userId) {
-        try {
-            const projects = await this.GovernmentProject.findAll({
-                where: {
-                    user_id: userId,
-                    status: PROJECT_STATUS.PENDING_APPROVAL
-                },
-                order: [['created_at', 'DESC']]
-            });
-
-            return projects.map(project => new GovernmentProjectEntity(project.toJSON()));
-        } catch (error) {
-            console.error('❌ Erro ao buscar projetos pendentes:', error);
-            throw new Error(`Falha ao buscar projetos pendentes: ${error.message}`);
-        }
-    }
-
-    /**
-     * Buscar projetos em execução
-     * @param {number} userId - ID do usuário (opcional)
-     * @returns {Promise<Array<GovernmentProjectEntity>>} - Projetos em execução
-     */
-    async findInExecution(userId = null) {
-        try {
-            const whereClause = { status: PROJECT_STATUS.IN_EXECUTION };
-            if (userId) {
-                whereClause.user_id = userId;
+            if (filters.limit) {
+                query = query.limit(filters.limit);
             }
 
-            const projects = await this.GovernmentProject.findAll({
-                where: whereClause,
-                include: [
-                    {
-                        model: this.User,
-                        as: 'user',
-                        attributes: ['id', 'email', 'name']
-                    },
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ],
-                order: [['started_at', 'ASC']]
-            });
+            // Ordenar por data de criação (mais recente primeiro)
+            query = query.order('created_at', { ascending: false });
 
-            return projects.map(project => new GovernmentProjectEntity(project.toJSON()));
+            const { data, error } = await query;
+
+            if (error) {
+                throw new Error(`Erro ao buscar projetos do usuário: ${error.message}`);
+            }
+
+            return data.map(project => new GovernmentProjectEntity(project));
         } catch (error) {
-            console.error('❌ Erro ao buscar projetos em execução:', error);
-            throw new Error(`Falha ao buscar projetos em execução: ${error.message}`);
+            console.error('❌ Erro ao buscar projetos por usuário:', error);
+            throw error;
         }
     }
 
@@ -217,23 +146,21 @@ class GovernmentProjectRepository {
      */
     async update(projectId, updateData) {
         try {
-            const [updatedRowsCount] = await this.GovernmentProject.update(
-                updateData,
-                {
-                    where: { id: projectId },
-                    returning: true
-                }
-            );
+            const { data, error } = await supabase
+                .from('government_projects')
+                .update(updateData)
+                .eq('id', projectId)
+                .select()
+                .single();
 
-            if (updatedRowsCount === 0) {
-                throw new Error('Projeto não encontrado');
+            if (error) {
+                throw new Error(`Erro ao atualizar projeto: ${error.message}`);
             }
 
-            const updatedProject = await this.findById(projectId);
-            return updatedProject;
+            return new GovernmentProjectEntity(data);
         } catch (error) {
             console.error('❌ Erro ao atualizar projeto:', error);
-            throw new Error(`Falha ao atualizar projeto: ${error.message}`);
+            throw error;
         }
     }
 
@@ -244,240 +171,138 @@ class GovernmentProjectRepository {
      */
     async delete(projectId) {
         try {
-            const deletedRowsCount = await this.GovernmentProject.destroy({
-                where: { id: projectId }
-            });
+            const { error } = await supabase
+                .from('government_projects')
+                .delete()
+                .eq('id', projectId);
 
-            return deletedRowsCount > 0;
+            if (error) {
+                throw new Error(`Erro ao deletar projeto: ${error.message}`);
+            }
+
+            return true;
         } catch (error) {
             console.error('❌ Erro ao deletar projeto:', error);
-            throw new Error(`Falha ao deletar projeto: ${error.message}`);
+            throw error;
         }
     }
 
     /**
-     * Verificar se usuário pode criar novo projeto
+     * Verificar se usuário pode criar projeto
      * @param {number} userId - ID do usuário
-     * @returns {Promise<Object>} - Status da verificação
+     * @returns {Promise<Object>} - Resultado da verificação
      */
     async canUserCreateProject(userId) {
         try {
-            // Verificar projetos ativos
-            const activeProjects = await this.findActiveProjectsByUserId(userId);
-            const activeCount = activeProjects.length;
+            // Buscar projetos ativos do usuário (não finalizados)
+            const { data: activeProjects, error } = await supabase
+                .from('government_projects')
+                .select('id, status')
+                .eq('user_id', userId)
+                .not('status', 'in', `(${PROJECT_STATUS.COMPLETED},${PROJECT_STATUS.CANCELLED})`);
+
+            if (error) {
+                throw new Error(`Erro ao verificar projetos ativos: ${error.message}`);
+            }
+
+            const activeCount = activeProjects?.length || 0;
 
             if (activeCount >= SYSTEM_LIMITS.MAX_ACTIVE_PROJECTS_PER_USER) {
                 return {
                     canCreate: false,
-                    reason: 'Limite de projetos ativos atingido',
-                    activeCount,
-                    maxAllowed: SYSTEM_LIMITS.MAX_ACTIVE_PROJECTS_PER_USER
+                    reason: `Limite de ${SYSTEM_LIMITS.MAX_ACTIVE_PROJECTS_PER_USER} projetos ativos atingido`,
+                    activeProjects: activeCount
                 };
-            }
-
-            // Verificar projetos pendentes
-            const pendingProjects = await this.findPendingApprovalByUserId(userId);
-            const pendingCount = pendingProjects.length;
-
-            if (pendingCount >= SYSTEM_LIMITS.MAX_PENDING_PROJECTS_PER_USER) {
-                return {
-                    canCreate: false,
-                    reason: 'Limite de projetos pendentes atingido',
-                    pendingCount,
-                    maxAllowed: SYSTEM_LIMITS.MAX_PENDING_PROJECTS_PER_USER
-                };
-            }
-
-            // Verificar cooldown
-            const lastProject = await this.GovernmentProject.findOne({
-                where: { user_id: userId },
-                order: [['created_at', 'DESC']]
-            });
-
-            if (lastProject) {
-                const timeSinceLastProject = Date.now() - new Date(lastProject.created_at).getTime();
-                const cooldownTime = SYSTEM_LIMITS.PROJECT_COOLDOWN_HOURS * 60 * 60 * 1000;
-
-                if (timeSinceLastProject < cooldownTime) {
-                    const remainingTime = Math.ceil((cooldownTime - timeSinceLastProject) / (60 * 60 * 1000));
-                    return {
-                        canCreate: false,
-                        reason: 'Período de cooldown ativo',
-                        remainingHours: remainingTime
-                    };
-                }
             }
 
             return {
                 canCreate: true,
-                activeCount,
-                pendingCount
+                activeProjects: activeCount,
+                remainingSlots: SYSTEM_LIMITS.MAX_ACTIVE_PROJECTS_PER_USER - activeCount
             };
         } catch (error) {
-            console.error('❌ Erro ao verificar criação de projeto:', error);
-            throw new Error(`Falha na verificação: ${error.message}`);
+            console.error('❌ Erro ao verificar se usuário pode criar projeto:', error);
+            throw error;
         }
     }
 
     /**
-     * Buscar projetos que devem ser finalizados
-     * @returns {Promise<Array<GovernmentProjectEntity>>} - Projetos para finalizar
+     * Buscar projetos por status
+     * @param {string} status - Status do projeto
+     * @param {Object} options - Opções da consulta
+     * @returns {Promise<Array<GovernmentProjectEntity>>} - Lista de projetos
      */
-    async findProjectsToComplete() {
+    async findByStatus(status, options = {}) {
         try {
-            const projects = await this.GovernmentProject.findAll({
-                where: {
-                    status: PROJECT_STATUS.IN_EXECUTION,
-                    estimated_completion: {
-                        [Op.lte]: new Date()
-                    }
-                },
-                include: [
-                    {
-                        model: this.User,
-                        as: 'user',
-                        attributes: ['id', 'email', 'name']
-                    },
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ]
-            });
+            let query = supabase
+                .from('government_projects')
+                .select(`
+                    *,
+                    user:users!user_id (
+                        id,
+                        email,
+                        name
+                    ),
+                    state:states!state_id (
+                        id,
+                        name,
+                        acronym
+                    )
+                `)
+                .eq('status', status);
 
-            return projects.map(project => new GovernmentProjectEntity(project.toJSON()));
+            if (options.limit) {
+                query = query.limit(options.limit);
+            }
+
+            if (options.orderBy) {
+                query = query.order(options.orderBy, { 
+                    ascending: options.ascending || false 
+                });
+            } else {
+                query = query.order('created_at', { ascending: false });
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                throw new Error(`Erro ao buscar projetos por status: ${error.message}`);
+            }
+
+            return data.map(project => new GovernmentProjectEntity(project));
         } catch (error) {
-            console.error('❌ Erro ao buscar projetos para completar:', error);
-            throw new Error(`Falha na busca: ${error.message}`);
+            console.error('❌ Erro ao buscar projetos por status:', error);
+            throw error;
         }
     }
 
     /**
-     * Obter estatísticas de projetos do usuário
+     * Contar projetos por usuário e status
      * @param {number} userId - ID do usuário
-     * @returns {Promise<Object>} - Estatísticas
+     * @param {string} status - Status (opcional)
+     * @returns {Promise<number>} - Contagem de projetos
      */
-    async getUserProjectStats(userId) {
+    async countByUser(userId, status = null) {
         try {
-            const stats = await this.GovernmentProject.findAll({
-                where: { user_id: userId },
-                attributes: [
-                    'status',
-                    [this.GovernmentProject.sequelize.fn('COUNT', '*'), 'count']
-                ],
-                group: ['status'],
-                raw: true
-            });
+            let query = supabase
+                .from('government_projects')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', userId);
 
-            const result = {
-                total: 0,
-                draft: 0,
-                pending_approval: 0,
-                approved: 0,
-                rejected: 0,
-                in_execution: 0,
-                completed: 0,
-                cancelled: 0
-            };
+            if (status) {
+                query = query.eq('status', status);
+            }
 
-            stats.forEach(stat => {
-                result[stat.status] = parseInt(stat.count);
-                result.total += parseInt(stat.count);
-            });
+            const { count, error } = await query;
 
-            return result;
+            if (error) {
+                throw new Error(`Erro ao contar projetos: ${error.message}`);
+            }
+
+            return count || 0;
         } catch (error) {
-            console.error('❌ Erro ao obter estatísticas:', error);
-            throw new Error(`Falha ao obter estatísticas: ${error.message}`);
-        }
-    }
-
-    /**
-     * Buscar projetos com filtros avançados
-     * @param {Object} filters - Filtros de busca
-     * @returns {Promise<Object>} - Resultado com projetos e metadados
-     */
-    async findWithFilters(filters = {}) {
-        try {
-            const {
-                userId = null,
-                stateId = null,
-                status = null,
-                projectType = null,
-                startDate = null,
-                endDate = null,
-                search = null,
-                page = 1,
-                limit = 20,
-                orderBy = 'created_at',
-                orderDirection = 'DESC'
-            } = filters;
-
-            const whereClause = {};
-            const offset = (page - 1) * limit;
-
-            // Filtros básicos
-            if (userId) whereClause.user_id = userId;
-            if (stateId) whereClause.state_id = stateId;
-            if (status) whereClause.status = status;
-
-            // Filtro por data
-            if (startDate || endDate) {
-                whereClause.created_at = {};
-                if (startDate) whereClause.created_at[Op.gte] = new Date(startDate);
-                if (endDate) whereClause.created_at[Op.lte] = new Date(endDate);
-            }
-
-            // Filtro por tipo de projeto (JSON)
-            if (projectType) {
-                whereClause['$refined_project.project_type$'] = projectType;
-            }
-
-            // Busca textual
-            if (search) {
-                whereClause[Op.or] = [
-                    { original_idea: { [Op.like]: `%${search}%` } },
-                    { '$refined_project.name$': { [Op.like]: `%${search}%` } },
-                    { '$refined_project.description$': { [Op.like]: `%${search}%` } }
-                ];
-            }
-
-            // Buscar projetos
-            const { count, rows } = await this.GovernmentProject.findAndCountAll({
-                where: whereClause,
-                include: [
-                    {
-                        model: this.User,
-                        as: 'user',
-                        attributes: ['id', 'email', 'name']
-                    },
-                    {
-                        model: this.State,
-                        as: 'state',
-                        attributes: ['id', 'name', 'acronym']
-                    }
-                ],
-                limit,
-                offset,
-                order: [[orderBy, orderDirection]],
-                distinct: true
-            });
-
-            const projects = rows.map(project => new GovernmentProjectEntity(project.toJSON()));
-
-            return {
-                projects,
-                pagination: {
-                    total: count,
-                    page,
-                    limit,
-                    pages: Math.ceil(count / limit)
-                }
-            };
-        } catch (error) {
-            console.error('❌ Erro na busca com filtros:', error);
-            throw new Error(`Falha na busca: ${error.message}`);
+            console.error('❌ Erro ao contar projetos:', error);
+            throw error;
         }
     }
 }

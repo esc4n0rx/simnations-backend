@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const GovernmentProjectRepository = require('../../domain/repositories/government-project-repository');
+const ProjectExecutionRepository = require('../../domain/repositories/project-execution-repository');
 const StateRepository = require('../../domain/repositories/state-repository');
 const { PROJECT_STATUS } = require('../../shared/constants/government-project-constants');
 
@@ -7,7 +8,7 @@ class ProjectExecutionService {
     constructor() {
         this.projectRepository = new GovernmentProjectRepository();
         this.stateRepository = new StateRepository();
-        this.ProjectExecution = require('../../infrastructure/database/models').ProjectExecution;
+        this.executionRepository = new ProjectExecutionRepository();
         
         // Iniciar job de execução (executa a cada hora)
         this.startExecutionJob();
@@ -33,7 +34,7 @@ class ProjectExecutionService {
                 executions.push({
                     project_id: projectId,
                     execution_type: 'payment',
-                    scheduled_for: scheduledDate,
+                    scheduled_for: scheduledDate.toISOString(),
                     payment_amount: installmentsConfig.installment_amount,
                     installment_number: i,
                     total_installments: installmentsConfig.number_of_installments,
@@ -41,7 +42,7 @@ class ProjectExecutionService {
                 });
             }
 
-            await this.ProjectExecution.bulkCreate(executions);
+            await this.executionRepository.bulkCreate(executions);
             console.log(`✅ ${executions.length} parcelas agendadas`);
 
         } catch (error) {

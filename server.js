@@ -64,135 +64,115 @@ app.get('/health', (req, res) => {
         message: 'SimNations Backend está funcionando!',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        economic_job_status: economicJob ? economicJob.getStatus() : 'not_initialized'
+        economic_job_status: economicJob ? economicJob.isRunning() : 'not_initialized'
     });
 });
 
-// Rota para status da job econômica
-app.get('/admin/economic-job/status', (req, res) => {
-    if (!economicJob) {
-        return res.status(503).json({
-            success: false,
-            message: 'Job econômica não inicializada'
-        });
-    }
+// Configurar rotas da API
+const apiRouter = express.Router();
 
-    res.json({
-        success: true,
-        data: economicJob.getStatus(),
-        timestamp: new Date().toISOString()
-    });
-});
+// Rotas de autenticação
+apiRouter.use('/auth', authRoutes);
 
-// Rota para execução manual da job (apenas em desenvolvimento)
-if (process.env.NODE_ENV === 'development') {
-    app.post('/admin/economic-job/execute', async (req, res) => {
-        if (!economicJob) {
-            return res.status(503).json({
-                success: false,
-                message: 'Job econômica não inicializada'
-            });
-        }
+// Rotas de usuário
+apiRouter.use('/user', userRoutes);
 
-        try {
-            const result = await economicJob.executeManual();
-            res.json({
-                success: true,
-                data: result,
-                timestamp: new Date().toISOString()
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: 'Erro ao executar job manualmente',
-                error: error.message
-            });
-        }
-    });
-}
+// Rotas de quiz
+apiRouter.use('/quiz', quizRoutes);
 
-// Rotas da API
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/quiz', quizRoutes);
-app.use('/api/state', stateRoutes);
-app.use('/api/events', politicalEventRoutes);
-router.use('/government-projects', governmentProjectRoutes);
+// Rotas de estado
+apiRouter.use('/state', stateRoutes);
 
-// Middleware de tratamento de erros
+// Rotas de eventos políticos
+apiRouter.use('/political-events', politicalEventRoutes);
+
+// [CORRIGIDO] Rotas de projetos governamentais
+apiRouter.use('/government-projects', governmentProjectRoutes);
+
+// Aplicar todas as rotas da API com prefixo /api
+app.use('/api', apiRouter);
+
+// Middleware de tratamento de erros (deve ser o último)
 app.use(errorMiddleware);
 
-// Rota para 404
-app.use('*', (req, res) => {
-    res.status(404).json({
-        success: false,
-        message: 'Rota não encontrada',
-        timestamp: new Date().toISOString()
-    });
-});
+// Função para inicializar jobs
+async function initializeJobs() {
+    try {
+        console.log('🔄 Inicializando jobs do sistema...');
+        
+        // Inicializar job econômica
+        economicJob = new EconomicUpdateJob();
+        await economicJob.start();
+        
+        console.log('✅ Jobs inicializadas com sucesso');
+    } catch (error) {
+        console.error('❌ Erro ao inicializar jobs:', error);
+    }
+}
 
-// Inicializar servidor
+// Função para inicializar o servidor
 async function startServer() {
     try {
-        // Testar conexão com banco
+        // Testar conexão com o banco
+        console.log('🔍 Testando conexão com o banco de dados...');
         const isConnected = await testConnection();
+        
         if (!isConnected) {
-            console.error('❌ Falha na conexão com o banco de dados');
-            process.exit(1);
+            throw new Error('Falha na conexão com o banco de dados');
         }
-
-        // Inicializar job econômica
-        if (process.env.NODE_ENV !== 'test') { // Não executar em testes
-            economicJob = new EconomicUpdateJob();
-            economicJob.start();
-        }
-
+        
+        // Inicializar jobs
+        await initializeJobs();
+        
         // Iniciar servidor
         app.listen(PORT, () => {
-            console.log(`🚀 Servidor rodando na porta ${PORT}`);
-            console.log(`🌟 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`📊 Health check: http://localhost:${PORT}/health`);
-            
-            if (economicJob) {
-                console.log(`🏛️ Job econômica ativa: ${ECONOMIC_CONSTANTS.JOB_SCHEDULE}`);
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`🔧 Execução manual: POST http://localhost:${PORT}/admin/economic-job/execute`);
-                }
-            }
+            console.log(`
+🚀 Servidor SimNations iniciado com sucesso!
+🌍 Ambiente: ${process.env.NODE_ENV || 'development'}
+🔗 URL: http://localhost:${PORT}
+📊 Health Check: http://localhost:${PORT}/health
+📚 API Base: http://localhost:${PORT}/api
+⏰ Job Econômica: ${economicJob ? 'Ativa' : 'Inativa'}
+            `);
         });
+        
     } catch (error) {
         console.error('❌ Erro ao iniciar servidor:', error);
         process.exit(1);
     }
 }
 
+// Tratamento de sinais do sistema
+process.on('SIGTERM', async () => {
+    console.log('📴 Recebido SIGTERM. Desligando servidor...');
+    
+    if (economicJob) {
+        await economicJob.stop();
+    }
+    
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('📴 Recebido SIGINT. Desligando servidor...');
+    
+    if (economicJob) {
+        await economicJob.stop();
+    }
+    
+    process.exit(0);
+});
+
 // Tratamento de erros não capturados
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection:', reason);
+    console.error('Promise:', promise);
+});
+
 process.on('uncaughtException', (error) => {
     console.error('❌ Uncaught Exception:', error);
     process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-    process.exit(1);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('🔄 SIGTERM recebido, encerrando servidor...');
-    if (economicJob) {
-        economicJob.stop();
-    }
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    console.log('🔄 SIGINT recebido, encerrando servidor...');
-    if (economicJob) {
-        economicJob.stop();
-    }
-    process.exit(0);
-});
-
-// Iniciar aplicação
+// Iniciar o servidor
 startServer();
