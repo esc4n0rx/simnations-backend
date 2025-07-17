@@ -1,134 +1,81 @@
+const GovernmentProjectEntity = require('../../domain/entities/government-project-entity');
 const GovernmentProjectRepository = require('../../domain/repositories/government-project-repository');
 const StateRepository = require('../../domain/repositories/state-repository');
-const GovernmentProjectEntity = require('../../domain/entities/government-project-entity');
-const ProjectRefinementAgentService = require('./project-refinement-agent-service');
-const ProjectAnalysisAgentService = require('./project-analysis-agent-service');
+const ProjectRefinementService = require('./project-refinement-agent-service');
+const ProjectAnalysisService = require('./project-analysis-agent-service');
 const ProjectPopulationAgentService = require('./project-population-agent-service');
 const ProjectExecutionService = require('./project-execution-service');
-const GroqProvider = require('../../infrastructure/ai/groq-provider');
-const TimeoutHelper = require('../../shared/utils/timeout-helper');
-const debugLogger = require('../../shared/utils/project-debug-logger');
-const { PROJECT_STATUS, EXECUTION_METHODS } = require('../../shared/constants/government-project-constants');
+const GroqProvider= require('../../infrastructure/ai/groq-provider');
+const { PROJECT_STATUS } = require('../../shared/constants/government-project-constants');
+const { DebugLogger, TimeoutHelper } = require('../../shared/utils/project-debug-logger');
 
 class GovernmentProjectService {
     constructor() {
         this.projectRepository = new GovernmentProjectRepository();
         this.stateRepository = new StateRepository();
+        this.llmProvider = new GroqProvider();
+        this.refinementService = new ProjectRefinementService(this.llmProvider);
+        this.analysisService = new ProjectAnalysisService(this.llmProvider);
+        this.populationService = new ProjectPopulationAgentService(this.llmProvider);
         this.executionService = new ProjectExecutionService();
         
-        // Inicializar provedor de IA
-        this.llmProvider = new GroqProvider();
-        
-        // Inicializar agentes
-        this.refinementAgent = new ProjectRefinementAgentService(this.llmProvider);
-        this.analysisAgent = new ProjectAnalysisAgentService(this.llmProvider);
-        this.populationAgent = new ProjectPopulationAgentService(this.llmProvider);
-
-        debugLogger.log('SERVICE_INITIALIZED', {
-            hasLLMProvider: !!this.llmProvider,
-            hasAgents: !!(this.refinementAgent && this.analysisAgent && this.populationAgent)
-        });
+        this.debugLogger = new DebugLogger('GOVERNMENT_PROJECT_SERVICE');
     }
 
     /**
-     * Criar nova ideia de projeto (Etapa 1) - VERSÃO DEBUG
+     * Criar novo projeto
+     * @param {string} userId - ID do usuário
+     * @param {string} originalIdea - Ideia original do projeto
+     * @returns {Promise<Object>}
      */
-    async createProjectIdea(userId, originalIdea) {
+    async createProject(userId, originalIdea) {
+        const debugLogger = new DebugLogger('CREATE_PROJECT');
+        
         try {
-            debugLogger.logStep('SERVICE_START', {
-                userId,
-                ideaLength: originalIdea.length
-            }, 'START');
+            debugLogger.logStep('START', { userId, ideaLength: originalIdea.length }, 'START');
 
-            // Verificar se usuário pode criar projeto
-            debugLogger.logStep('USER_VALIDATION_START', {}, 'START');
-            
-            const canCreate = await TimeoutHelper.withTimeout(
-                this.projectRepository.canUserCreateProject(userId),
-                5000,
-                'verificação de permissão do usuário'
-            );
-
-            if (!canCreate.canCreate) {
-                debugLogger.logStep('USER_VALIDATION_FAILED', {
-                    reason: canCreate.reason,
-                    details: canCreate
-                }, 'ERROR');
-                
-                return {
-                    success: false,
-                    error: canCreate.reason,
-                    details: canCreate
-                };
+            // Validar entrada
+            if (!originalIdea || originalIdea.trim().length < 10) {
+                throw new Error('A ideia do projeto deve ter pelo menos 10 caracteres');
             }
 
-            debugLogger.logSuccess('USER_VALIDATION_COMPLETE', { canCreate: true });
+            // Obter dados do usuário e estado
+            const userData = await this.stateRepository.getUserById(userId);
+            if (!userData) {
+                throw new Error('Usuário não encontrado');
+            }
 
-            // Buscar dados do estado
-            debugLogger.logStep('STATE_DATA_FETCH_START', {}, 'START');
-            
-            const stateData = await TimeoutHelper.withTimeout(
-                this.stateRepository.findCompleteStateDataByUserId(userId),
-                10000,
-                'busca de dados do estado'
-            );
-
+            const stateData = await this.stateRepository.getStateByUserId(userId);
             if (!stateData) {
-                debugLogger.logStep('STATE_DATA_FETCH_FAILED', { reason: 'Dados não encontrados' }, 'ERROR');
-                throw new Error('Dados do estado não encontrados');
+                throw new Error('Estado do usuário não encontrado');
             }
 
-            debugLogger.logSuccess('STATE_DATA_FETCH_COMPLETE', {
-                stateId: stateData.state_info?.id,
-                stateName: stateData.state_info?.state,
-                hasEconomyData: !!stateData.economy,
-                hasGovernanceData: !!stateData.governance
+            debugLogger.logStep('DATA_LOADED', {
+                userExists: !!userData,
+                stateExists: !!stateData,
+                stateId: stateData.state_info?.id
             });
 
             // Criar entidade do projeto
-            debugLogger.logStep('PROJECT_ENTITY_CREATE_START', {}, 'START');
-            
-            const projectEntity = new GovernmentProjectEntity({
+            const projectData = {
                 user_id: userId,
                 state_id: stateData.state_info.id,
                 original_idea: originalIdea.trim(),
                 status: PROJECT_STATUS.DRAFT
-            });
+            };
 
-            debugLogger.logSuccess('PROJECT_ENTITY_CREATE_COMPLETE', {
-                entityCreated: true,
-                status: projectEntity.status
-            });
+            const project = new GovernmentProjectEntity(projectData);
+            debugLogger.logStep('ENTITY_CREATED', { projectId: 'pending' });
 
-            // Salvar projeto inicial
-            debugLogger.logStep('PROJECT_SAVE_START', {}, 'START');
-            
-            const savedProject = await TimeoutHelper.withTimeout(
-                this.projectRepository.create(projectEntity),
-                5000,
-                'criação do projeto no banco'
-            );
+            // Salvar projeto no banco
+            const savedProject = await this.projectRepository.create(project);
+            debugLogger.logStep('PROJECT_SAVED', { projectId: savedProject.id });
 
-            debugLogger.logSuccess('PROJECT_SAVE_COMPLETE', {
-                projectId: savedProject.id,
-                status: savedProject.status
-            });
-
-            // Iniciar processamento assíncrono (VERSÃO CORRIGIDA)
-            debugLogger.logStep('ASYNC_PROCESSING_START', {
-                projectId: savedProject.id
-            }, 'START');
-
-            // NÃO AGUARDAR - processar em background
-            setImmediate(() => {
-                this.processProjectRefinementSafely(savedProject.id, stateData)
-                    .catch(error => {
-                        console.error(`❌ [SERVICE] Erro no processamento assíncrono do projeto ${savedProject.id}:`, error);
-                        debugLogger.logError('ASYNC_PROCESSING_ERROR', error, {
-                            projectId: savedProject.id
-                        });
-                    });
-            });
+            // Processar em background (sem await para não bloquear response)
+            this.processProjectRefinementSafely(savedProject.id, stateData)
+                .catch(error => {
+                    console.error(`❌ [BACKGROUND] Erro no processamento assíncrono do projeto ${savedProject.id}:`, error);
+                });
 
             debugLogger.logSuccess('ASYNC_PROCESSING_SCHEDULED', {
                 projectId: savedProject.id,
@@ -152,6 +99,127 @@ class GovernmentProjectService {
                 originalIdea: originalIdea.substring(0, 100)
             });
             throw new Error(`Falha ao criar projeto: ${error.message}`);
+        }
+    }
+
+    /**
+     * Aprovar projeto
+     * @param {string} projectId - ID do projeto
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<Object>}
+     */
+    async approveProject(projectId, userId) {
+        try {
+            console.log(`📋 Aprovando projeto ${projectId}...`);
+
+            // Buscar projeto
+            const project = await this.projectRepository.findById(projectId);
+            if (!project) {
+                throw new Error('Projeto não encontrado');
+            }
+
+            // Verificar se pode ser aprovado
+            if (!project.canBeApproved()) {
+                throw new Error('Projeto não pode ser aprovado no estado atual');
+            }
+
+            // Obter dados do estado para processos
+            const stateData = await this.stateRepository.getStateByUserId(userId);
+            if (!stateData) {
+                throw new Error('Estado do usuário não encontrado');
+            }
+
+            // Aprovar projeto
+            project.approve();
+            
+            // [CORRIGIDO] Iniciar execução do projeto
+            project.start();
+            
+            // Salvar mudanças
+            const updatedProject = await this.projectRepository.update(projectId, project);
+            
+            // [CORRIGIDO] Gerar reação da população em background
+            this.generatePopulationReactionSafely(updatedProject, stateData)
+                .catch(error => {
+                    console.error(`❌ [BACKGROUND] Erro ao gerar reação da população para projeto ${projectId}:`, error);
+                });
+
+            // [CORRIGIDO] Agendar execuções do projeto
+            await this.scheduleProjectExecutions(updatedProject);
+
+            console.log(`✅ Projeto ${projectId} aprovado com sucesso`);
+
+            return {
+                success: true,
+                project: updatedProject.toObject(),
+                message: 'Projeto aprovado e execução iniciada'
+            };
+
+        } catch (error) {
+            console.error('❌ Erro ao aprovar projeto:', error);
+            throw new Error(`Falha ao aprovar projeto: ${error.message}`);
+        }
+    }
+
+    /**
+     * [NOVO] Gerar reação da população de forma segura
+     * @param {GovernmentProjectEntity} project - Projeto aprovado
+     * @param {Object} stateData - Dados do estado
+     */
+    async generatePopulationReactionSafely(project, stateData) {
+        try {
+            console.log(`👥 Gerando reação da população para projeto ${project.id}...`);
+
+            const populationReaction = await this.populationService.generatePopulationReaction(
+                project.toObject(),
+                stateData
+            );
+
+            // Atualizar projeto com a reação
+            project.setPopulationReaction(populationReaction);
+            
+            // Salvar no banco
+            await this.projectRepository.update(project.id, project);
+            
+            console.log(`✅ Reação da população gerada para projeto ${project.id}`);
+
+        } catch (error) {
+            console.error(`❌ Erro ao gerar reação da população para projeto ${project.id}:`, error);
+            // Não interromper o fluxo principal, apenas logar o erro
+        }
+    }
+
+    /**
+     * [NOVO] Agendar execuções do projeto
+     * @param {GovernmentProjectEntity} project - Projeto aprovado
+     */
+    async scheduleProjectExecutions(project) {
+        try {
+            console.log(`📅 Agendando execuções para projeto ${project.id}...`);
+
+            const projectData = project.toObject();
+
+            // Agendar parcelas se configurado
+            if (projectData.analysis_data?.execution_method === 'installments' && 
+                projectData.analysis_data?.installments_config) {
+                
+                await this.executionService.scheduleInstallments(
+                    project.id,
+                    projectData.analysis_data.installments_config
+                );
+            }
+
+            // Agendar efeitos do projeto
+            await this.executionService.scheduleEffects(project.id, projectData);
+
+            // Agendar conclusão do projeto
+            await this.executionService.scheduleCompletion(project.id, projectData);
+
+            console.log(`✅ Execuções agendadas para projeto ${project.id}`);
+
+        } catch (error) {
+            console.error(`❌ Erro ao agendar execuções para projeto ${project.id}:`, error);
+            // Não interromper o fluxo principal
         }
     }
 
@@ -182,191 +250,122 @@ class GovernmentProjectService {
             
             debugLogger.logError('REFINEMENT_SAFE_ERROR', error, { projectId });
 
-            // Marcar projeto como com erro
+            // Marcar projeto como rejeitado por falha técnica
             try {
                 await this.projectRepository.update(projectId, {
-                    status: PROJECT_STATUS.DRAFT,
+                    status: PROJECT_STATUS.REJECTED,
+                    rejection_reason: `Falha técnica no processamento: ${error.message}`,
                     processing_logs: [{
                         timestamp: new Date(),
-                        message: `Erro no processamento: ${error.message}`,
-                        type: 'error'
+                        message: `Erro crítico no refinamento: ${error.message}`
                     }]
                 });
-                
-                debugLogger.logSuccess('ERROR_STATE_UPDATED', { projectId });
             } catch (updateError) {
-                console.error(`❌ [SERVICE] Erro ao atualizar estado de erro do projeto ${projectId}:`, updateError);
-                debugLogger.logError('ERROR_STATE_UPDATE_FAILED', updateError, { projectId });
+                console.error(`❌ [SERVICE] Falha ao atualizar status do projeto ${projectId}:`, updateError);
             }
         }
     }
 
     /**
-     * Processar refinamento do projeto (Etapa 2 - Agente 1) - VERSÃO CORRIGIDA
+     * Processar refinamento e análise do projeto
      */
     async processProjectRefinement(projectId, stateData) {
+        const debugLogger = new DebugLogger('PROCESS_REFINEMENT');
+        
         try {
-            debugLogger.logStep('REFINEMENT_START', { projectId }, 'START');
+            debugLogger.logStep('START', { projectId }, 'START');
 
-            // Buscar projeto (SEM JOIN problemático)
-            debugLogger.logStep('PROJECT_FETCH_FOR_REFINEMENT_START', {}, 'START');
-            
+            // Buscar projeto
             const project = await this.projectRepository.findById(projectId);
             if (!project) {
                 throw new Error('Projeto não encontrado');
             }
 
-            debugLogger.logSuccess('PROJECT_FETCH_FOR_REFINEMENT_COMPLETE', {
-                projectFound: true,
-                originalIdeaLength: project.original_idea?.length
+            debugLogger.logStep('PROJECT_LOADED', { 
+                projectId, 
+                status: project.status,
+                originalIdeaLength: project.original_idea?.length 
             });
 
-            // Verificar se agentes de IA estão disponíveis
-            if (!this.refinementAgent) {
-                throw new Error('Agente de refinamento não disponível');
-            }
-
-            // Executar refinamento
-            debugLogger.logStep('AI_REFINEMENT_START', {
-                agentAvailable: !!this.refinementAgent
-            }, 'START');
-
-            const refinementResult = await TimeoutHelper.withTimeout(
-                this.refinementAgent.refineProjectIdea(project.original_idea, stateData),
-                20000,
-                'refinamento da IA'
+            // Executar refinamento (Agente 1)
+            debugLogger.logStep('REFINEMENT_START', { projectId });
+            const refinedProject = await TimeoutHelper.withTimeout(
+                () => this.refinementService.refineProject(project.original_idea, stateData),
+                30000 // 30 segundos
             );
 
-            debugLogger.logSuccess('AI_REFINEMENT_COMPLETE', {
-                status: refinementResult.status,
-                hasName: !!refinementResult.name,
-                hasObjective: !!refinementResult.objective
-            });
-
-            // Processar resultado
-            if (refinementResult.status === 'rejected') {
-                debugLogger.logStep('REFINEMENT_REJECTED', {
-                    reason: refinementResult.rejection_reason
-                }, 'WARNING');
-                
-                await this.projectRepository.update(projectId, {
-                    status: PROJECT_STATUS.REJECTED,
-                    rejection_reason: refinementResult.rejection_reason,
-                    refinement_attempts: project.refinement_attempts + 1,
-                    processing_logs: [
-                        ...project.processing_logs,
-                        {
-                            timestamp: new Date(),
-                            message: `Projeto rejeitado no refinamento: ${refinementResult.rejection_reason}`,
-                            type: 'rejection'
-                        }
-                    ]
-                });
-                
-                debugLogger.logSuccess('REJECTION_SAVED', { projectId });
-                return;
-            }
-
-            // Atualizar com projeto refinado
-            debugLogger.logStep('REFINEMENT_UPDATE_START', {}, 'START');
+            // Atualizar projeto com dados refinados
+            project.setRefinedProject(refinedProject);
+            await this.projectRepository.update(projectId, project);
             
-            await this.projectRepository.update(projectId, {
-                status: PROJECT_STATUS.REFINED,
-                refined_project: refinementResult,
-                refinement_attempts: project.refinement_attempts + 1,
-                processing_logs: [
-                    ...project.processing_logs,
-                    {
-                        timestamp: new Date(),
-                        message: 'Projeto refinado com sucesso pelo Agente 1',
-                        type: 'success'
-                    }
-                ]
-            });
-
-            debugLogger.logSuccess('REFINEMENT_UPDATE_COMPLETE', { projectId });
-
-            // Continuar para análise
-            debugLogger.logStep('ANALYSIS_CHAIN_START', {}, 'START');
-            await this.processProjectAnalysis(projectId, stateData);
-
-        } catch (error) {
-            console.error(`❌ [SERVICE] Erro no refinamento do projeto ${projectId}:`, {
-                message: error.message,
-                stack: error.stack
-            });
-            debugLogger.logError('REFINEMENT_ERROR', error, { projectId });
-            throw error;
-        }
-    }
-
-    // Manter outros métodos inalterados mas simples...
-    async processProjectAnalysis(projectId, stateData) {
-        try {
-            debugLogger.logStep('ANALYSIS_START', { projectId }, 'START');
-            
-            const project = await this.projectRepository.findById(projectId);
-            if (!project || !project.refined_project) {
-                throw new Error('Projeto refinado não encontrado');
-            }
-
-            debugLogger.logSuccess('PROJECT_FETCH_FOR_ANALYSIS_COMPLETE', {
-                hasRefinedProject: !!project.refined_project,
-                projectName: project.refined_project?.name
-            });
-
-            const analysisResult = await TimeoutHelper.withTimeout(
-                this.analysisAgent.analyzeProject(project.refined_project, stateData),
-                25000,
-                'análise da IA'
-            );
-
-            debugLogger.logSuccess('AI_ANALYSIS_COMPLETE', {
-                hasCost: !!analysisResult.implementation_cost,
-                hasMethod: !!analysisResult.execution_method,
-                hasDuration: !!analysisResult.estimated_duration_months
-            });
-
-            await this.projectRepository.update(projectId, {
-                status: PROJECT_STATUS.PENDING_APPROVAL,
-                analysis_data: analysisResult,
-                processing_logs: [
-                    ...project.processing_logs,
-                    {
-                        timestamp: new Date(),
-                        message: 'Projeto analisado com sucesso pelo Agente 2',
-                        type: 'success'
-                    }
-                ]
-            });
-
-            debugLogger.logSuccess('ANALYSIS_UPDATE_COMPLETE', {
+            debugLogger.logStep('REFINEMENT_COMPLETE', { 
                 projectId,
-                newStatus: PROJECT_STATUS.PENDING_APPROVAL
+                refinedName: refinedProject.name
             });
 
+            // Executar análise (Agente 2)
+            debugLogger.logStep('ANALYSIS_START', { projectId });
+            const analysisData = await TimeoutHelper.withTimeout(
+                () => this.analysisService.analyzeProject(project.toObject(), stateData),
+                30000 // 30 segundos
+            );
+
+            // Atualizar projeto com dados de análise
+            project.setAnalysisData(analysisData);
+            project.status = PROJECT_STATUS.PENDING_APPROVAL;
+            
+            const finalProject = await this.projectRepository.update(projectId, project);
+            
+            debugLogger.logStep('ANALYSIS_COMPLETE', { 
+                projectId,
+                implementationCost: analysisData.implementation_cost,
+                technicalFeasibility: analysisData.technical_feasibility
+            });
+
+            debugLogger.logSuccess('PROCESS_COMPLETE', { 
+                projectId,
+                status: finalProject.status
+            });
+
+            return finalProject;
+
         } catch (error) {
-            console.error(`❌ [SERVICE] Erro na análise do projeto ${projectId}:`, error);
-            debugLogger.logError('ANALYSIS_ERROR', error, { projectId });
+            debugLogger.logError('PROCESS_ERROR', error, { projectId });
             throw error;
         }
     }
 
-    // Outros métodos básicos...
-    async getUserProjects(userId, options) {
+    /**
+     * Listar projetos do usuário
+     * @param {string} userId - ID do usuário
+     * @param {Object} filters - Filtros opcionais
+     * @returns {Promise<Object>}
+     */
+    async getUserProjects(userId, filters = {}) {
         try {
-            const projects = await this.projectRepository.findByUserId(userId, options);
+            const projects = await this.projectRepository.findByUserId(userId, filters);
+            
             return {
-                projects: projects.map(project => project.toObject()),
-                total: projects.length
+                success: true,
+                data: {
+                    projects: projects.map(project => project.toObject()),
+                    total: projects.length
+                }
             };
+
         } catch (error) {
             console.error('❌ Erro ao buscar projetos do usuário:', error);
             throw new Error(`Falha ao buscar projetos: ${error.message}`);
         }
     }
 
-    async getProjectById(userId, projectId) {
+    /**
+     * Buscar projeto por ID
+     * @param {string} projectId - ID do projeto
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<Object>}
+     */
+    async getProjectById(projectId, userId) {
         try {
             const project = await this.projectRepository.findById(projectId);
             
@@ -374,165 +373,142 @@ class GovernmentProjectService {
                 throw new Error('Projeto não encontrado');
             }
 
+            // Verificar se o projeto pertence ao usuário
             if (project.user_id !== userId) {
-                throw new Error('Usuário não autorizado a acessar este projeto');
+                throw new Error('Acesso negado ao projeto');
             }
 
             return {
-                project: project.toObject()
+                success: true,
+                data: {
+                    project: project.toObject()
+                }
             };
+
         } catch (error) {
             console.error('❌ Erro ao buscar projeto:', error);
-            throw error;
+            throw new Error(`Falha ao buscar projeto: ${error.message}`);
         }
     }
 
-    async getPendingProjects(userId) {
+    /**
+     * Rejeitar projeto
+     * @param {string} projectId - ID do projeto
+     * @param {string} reason - Motivo da rejeição
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<Object>}
+     */
+    async rejectProject(projectId, reason, userId) {
         try {
-            const projects = await this.projectRepository.findPendingByUserId(userId);
-            return projects.map(project => project.toObject());
-        } catch (error) {
-            console.error('❌ Erro ao buscar projetos pendentes:', error);
-            throw new Error(`Falha ao buscar projetos pendentes: ${error.message}`);
-        }
-    }
+            console.log(`❌ Rejeitando projeto ${projectId}...`);
 
-    async checkSystemStatus() {
-        try {
-            console.log('🔍 Verificando status do sistema de IA...');
-
-            const aiStatus = await TimeoutHelper.withTimeout(
-                this.llmProvider.testConnection(),
-                5000,
-                'teste de conexão com IA'
-            );
-
-            const projectStats = await this.projectRepository.getProjectStatistics();
-
-            return {
-                ai_provider: {
-                    status: aiStatus ? 'online' : 'offline',
-                    provider: 'Groq',
-                    last_check: new Date()
-                },
-                project_statistics: projectStats,
-                system_health: aiStatus ? 'healthy' : 'degraded'
-            };
-
-        } catch (error) {
-            console.error('❌ Erro ao verificar status do sistema:', error);
-            return {
-                ai_provider: {
-                    status: 'error',
-                    provider: 'Groq',
-                    error: error.message,
-                    last_check: new Date()
-                },
-                system_health: 'error'
-            };
-        }
-    }
-
-    // Implementações básicas dos outros métodos...
-    async approveProject(userId, projectId) {
-        try {
             const project = await this.projectRepository.findById(projectId);
-            if (!project) throw new Error('Projeto não encontrado');
-            if (project.user_id !== userId) throw new Error('Usuário não autorizado');
-            if (project.status !== PROJECT_STATUS.PENDING_APPROVAL) throw new Error('Projeto não está pendente de aprovação');
+            if (!project) {
+                throw new Error('Projeto não encontrado');
+            }
 
-            const updatedProject = await this.projectRepository.update(projectId, {
-                status: PROJECT_STATUS.APPROVED,
-                approved_at: new Date(),
-                processing_logs: [...project.processing_logs, {
-                    timestamp: new Date(),
-                    message: 'Projeto aprovado pelo governador',
-                    type: 'approval'
-                }]
-            });
+            if (project.user_id !== userId) {
+                throw new Error('Acesso negado ao projeto');
+            }
 
-            return {
-                success: true,
-                project: updatedProject.toObject(),
-                message: 'Projeto aprovado com sucesso'
-            };
-        } catch (error) {
-            console.error('❌ Erro ao aprovar projeto:', error);
-            throw error;
-        }
-    }
+            project.reject(reason);
+            const updatedProject = await this.projectRepository.update(projectId, project);
 
-    async rejectProject(userId, projectId, reason) {
-        try {
-            const project = await this.projectRepository.findById(projectId);
-            if (!project) throw new Error('Projeto não encontrado');
-            if (project.user_id !== userId) throw new Error('Usuário não autorizado');
-            if (project.status !== PROJECT_STATUS.PENDING_APPROVAL) throw new Error('Projeto não está pendente de aprovação');
-
-            const updatedProject = await this.projectRepository.update(projectId, {
-                status: PROJECT_STATUS.REJECTED,
-                rejection_reason: reason,
-                processing_logs: [...project.processing_logs, {
-                    timestamp: new Date(),
-                    message: `Projeto rejeitado pelo governador: ${reason}`,
-                    type: 'rejection'
-                }]
-            });
+            console.log(`✅ Projeto ${projectId} rejeitado`);
 
             return {
                 success: true,
                 project: updatedProject.toObject(),
                 message: 'Projeto rejeitado'
             };
+
         } catch (error) {
             console.error('❌ Erro ao rejeitar projeto:', error);
             throw new Error(`Falha ao rejeitar projeto: ${error.message}`);
         }
     }
 
-    async cancelProject(userId, projectId, reason) {
+    /**
+     * Cancelar projeto
+     * @param {string} projectId - ID do projeto
+     * @param {string} reason - Motivo do cancelamento
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<Object>}
+     */
+    async cancelProject(projectId, reason, userId) {
         try {
+            console.log(`🚫 Cancelando projeto ${projectId}...`);
+
             const project = await this.projectRepository.findById(projectId);
-            if (!project) throw new Error('Projeto não encontrado');
-            if (project.user_id !== userId) throw new Error('Usuário não autorizado');
+            if (!project) {
+                throw new Error('Projeto não encontrado');
+            }
 
-            const cancelableStatuses = [PROJECT_STATUS.DRAFT, PROJECT_STATUS.REFINED, PROJECT_STATUS.PENDING_APPROVAL, PROJECT_STATUS.APPROVED];
-            if (!cancelableStatuses.includes(project.status)) throw new Error('Projeto não pode ser cancelado no status atual');
+            if (project.user_id !== userId) {
+                throw new Error('Acesso negado ao projeto');
+            }
 
-            const updatedProject = await this.projectRepository.update(projectId, {
-                status: PROJECT_STATUS.CANCELLED,
-                cancellation_reason: reason,
-                cancelled_at: new Date(),
-                processing_logs: [...project.processing_logs, {
-                    timestamp: new Date(),
-                    message: `Projeto cancelado: ${reason}`,
-                    type: 'cancellation'
-                }]
-            });
+            project.cancel(reason);
+            const updatedProject = await this.projectRepository.update(projectId, project);
+
+            console.log(`✅ Projeto ${projectId} cancelado`);
 
             return {
                 success: true,
                 project: updatedProject.toObject(),
-                message: 'Projeto cancelado com sucesso'
+                message: 'Projeto cancelado'
             };
+
         } catch (error) {
             console.error('❌ Erro ao cancelar projeto:', error);
-            throw error;
+            throw new Error(`Falha ao cancelar projeto: ${error.message}`);
         }
     }
 
-    async searchProjects(userId, searchParams) {
+    /**
+     * Obter estatísticas de execução (admin)
+     * @returns {Promise<Object>}
+     */
+    async getExecutionStats() {
         try {
-            const results = await this.projectRepository.searchProjects(userId, searchParams);
+            return await this.executionService.getExecutionStats();
+        } catch (error) {
+            console.error('❌ Erro ao obter estatísticas:', error);
+            throw new Error(`Falha ao obter estatísticas: ${error.message}`);
+        }
+    }
+
+    /**
+     * Executar job manualmente (admin)
+     * @returns {Promise<Object>}
+     */
+    async executeJobManually() {
+        try {
+            return await this.executionService.executeJobManually();
+        } catch (error) {
+            console.error('❌ Erro ao executar job:', error);
+            throw new Error(`Falha ao executar job: ${error.message}`);
+        }
+    }
+
+    /**
+     * Obter execuções pendentes (admin)
+     * @param {number} limit - Limite de resultados
+     * @returns {Promise<Object>}
+     */
+    async getPendingExecutions(limit = 50) {
+        try {
+            const executions = await this.executionService.getPendingExecutions(limit);
             return {
-                projects: results.projects.map(project => project.toObject()),
-                total: results.total,
-                page: searchParams.page || 1,
-                limit: searchParams.limit || 20
+                success: true,
+                data: {
+                    executions,
+                    total: executions.length
+                }
             };
         } catch (error) {
-            console.error('❌ Erro na busca de projetos:', error);
-            throw new Error(`Falha na busca: ${error.message}`);
+            console.error('❌ Erro ao buscar execuções pendentes:', error);
+            throw new Error(`Falha ao buscar execuções: ${error.message}`);
         }
     }
 }

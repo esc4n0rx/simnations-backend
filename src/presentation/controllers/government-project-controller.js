@@ -1,400 +1,338 @@
 const GovernmentProjectService = require('../../application/services/government-project-service');
-const ProjectExecutionService = require('../../application/services/project-execution-service');
-const ResponseHelper = require('../../shared/helpers/response-helper');
-const TimeoutHelper = require('../../shared/utils/timeout-helper');
-const debugLogger = require('../../shared/utils/project-debug-logger');
-const { PROJECT_STATUS } = require('../../shared/constants/government-project-constants');
+const { StatusCodes } = require('http-status-codes');
 
 class GovernmentProjectController {
     constructor() {
         this.projectService = new GovernmentProjectService();
-        this.executionService = new ProjectExecutionService();
-        console.log(`🏗️ [CONTROLLER DEBUG] GovernmentProjectController constructed`);
     }
 
     /**
-     * [CORRIGIDO] Função para validar UUID
+     * Criar novo projeto
      */
-    isValidUUID(str) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        return uuidRegex.test(str);
-    }
-
-    /**
-     * Criar nova ideia de projeto - VERSÃO ULTRA DEBUG
-     */
-    createProjectIdea = async (req, res, next) => {
-        console.log(`\n🚀 [CONTROLLER] createProjectIdea METHOD STARTED`);
-        console.log(`📍 Timestamp: ${new Date().toISOString()}`);
-        console.log(`📍 Request received`);
-        console.log(`${'='.repeat(80)}`);
-        
-        let sessionId = null;
-        
+    createProject = async (req, res) => {
         try {
-            console.log(`\n🔍 [CONTROLLER] EXTRACTING DATA FROM REQUEST`);
-            
-            const userId = req.user?.id;
-            const { original_idea } = req.body || {};
+            const { original_idea } = req.body;
+            const userId = req.user.id;
 
-            console.log(`📍 User ID: ${userId}`);
-            console.log(`📍 Original Idea: ${original_idea}`);
-            console.log(`📍 Request User Object: ${JSON.stringify(req.user, null, 2)}`);
-            console.log(`📍 Request Body: ${JSON.stringify(req.body, null, 2)}`);
-            console.log(`${'='.repeat(80)}`);
+            const result = await this.projectService.createProject(userId, original_idea);
 
-            if (!userId) {
-                console.log(`❌ [CONTROLLER] USER ID NOT FOUND`);
-                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
-            }
-
-            if (!original_idea) {
-                console.log(`❌ [CONTROLLER] ORIGINAL IDEA NOT FOUND`);
-                return ResponseHelper.badRequest(res, 'Ideia do projeto é obrigatória');
-            }
-
-            console.log(`\n✅ [CONTROLLER] BASIC VALIDATION PASSED`);
-            console.log(`${'='.repeat(80)}`);
-
-            // Iniciar sessão de debug
-            sessionId = debugLogger.startSession(userId, original_idea);
-            debugLogger.logStep('CONTROLLER_START', {
-                userId,
-                ideaLength: original_idea?.length,
-                userAgent: req.headers['user-agent']
-            }, 'START');
-
-            console.log(`\n🔍 [CONTROLLER] DETAILED VALIDATION START`);
-
-            // Validações básicas
-            debugLogger.logStep('VALIDATION_START', {}, 'START');
-            
-            if (!original_idea || original_idea.trim().length === 0) {
-                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Empty idea`);
-                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia vazia' }, 'ERROR');
-                debugLogger.endSession('VALIDATION_ERROR');
-                return ResponseHelper.badRequest(res, 'Ideia do projeto é obrigatória');
-            }
-
-            if (original_idea.length < 10) {
-                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Idea too short: ${original_idea.length}`);
-                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia muito curta', length: original_idea.length }, 'ERROR');
-                debugLogger.endSession('VALIDATION_ERROR');
-                return ResponseHelper.badRequest(res, 'Ideia muito curta. Forneça mais detalhes sobre sua proposta');
-            }
-
-            if (original_idea.length > 1000) {
-                console.log(`❌ [CONTROLLER] VALIDATION FAILED - Idea too long: ${original_idea.length}`);
-                debugLogger.logStep('VALIDATION_FAILED', { reason: 'Ideia muito longa', length: original_idea.length }, 'ERROR');
-                debugLogger.endSession('VALIDATION_ERROR');
-                return ResponseHelper.badRequest(res, 'Ideia muito longa. Seja mais conciso em sua proposta');
-            }
-
-            console.log(`✅ [CONTROLLER] DETAILED VALIDATION PASSED`);
-            debugLogger.logSuccess('VALIDATION_COMPLETE', { ideaLength: original_idea.length });
-
-            console.log(`\n🔧 [CONTROLLER] CALLING SERVICE`);
-            console.log(`📍 About to call this.callServiceWithDebug`);
-            console.log(`${'='.repeat(80)}`);
-
-            // Chamar service com timeout e debug
-            debugLogger.logStep('SERVICE_CALL_START', {}, 'START');
-            
-            const result = await TimeoutHelper.withTimeout(
-                this.callServiceWithDebug(userId, original_idea, sessionId),
-                45000,
-                'criação de projeto'
-            );
-
-            console.log(`✅ [CONTROLLER] SERVICE CALL COMPLETED`);
-            console.log(`📍 Result: ${JSON.stringify(result, null, 2)}`);
-            console.log(`${'='.repeat(80)}`);
-
-            debugLogger.logSuccess('SERVICE_CALL_COMPLETE', { 
-                success: result.success,
-                projectId: result.project?.id 
+            return res.status(StatusCodes.CREATED).json({
+                success: true,
+                message: result.message,
+                data: {
+                    project: result.project
+                },
+                timestamp: new Date().toISOString()
             });
-
-            if (!result.success) {
-                console.log(`❌ [CONTROLLER] SERVICE FAILED`);
-                debugLogger.logStep('SERVICE_FAILED', { error: result.error }, 'ERROR');
-                debugLogger.endSession('SERVICE_ERROR');
-                return ResponseHelper.badRequest(res, result.error, result.details);
-            }
-
-            console.log(`\n📤 [CONTROLLER] PREPARING RESPONSE`);
-            debugLogger.logStep('RESPONSE_PREPARE', {
-                projectId: result.project.id,
-                message: result.message
-            }, 'START');
-
-            debugLogger.endSession('SUCCESS');
-            
-            console.log(`✅ [CONTROLLER] SENDING RESPONSE`);
-            console.log(`${'='.repeat(80)}`);
-            
-            ResponseHelper.created(res, result.project, result.message);
 
         } catch (error) {
-            console.log(`\n❌ [CONTROLLER] ERROR CAUGHT`);
-            console.log(`📍 Error: ${error.message}`);
-            console.log(`📍 Stack: ${error.stack}`);
-            console.log(`${'='.repeat(80)}`);
-            
-            debugLogger.logError('CONTROLLER_ERROR', error, {
-                userId: req.user?.id,
-                sessionId
+            console.error('❌ [CONTROLLER] Erro ao criar projeto:', error);
+            return res.status(StatusCodes.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
             });
-            debugLogger.endSession('CONTROLLER_ERROR');
-
-            if (error.message.includes('Timeout')) {
-                return ResponseHelper.error(res, 'O processamento está demorando mais que o esperado. Tente novamente em alguns minutos.', 408);
-            }
-
-            next(error);
         }
     };
 
     /**
-     * Chamar service com debug detalhado
+     * Listar projetos do usuário
      */
-    async callServiceWithDebug(userId, originalIdea, sessionId) {
-        console.log(`\n🔧 [CONTROLLER] callServiceWithDebug STARTED`);
-        console.log(`📍 User ID: ${userId}`);
-        console.log(`📍 Session ID: ${sessionId}`);
-        console.log(`${'='.repeat(80)}`);
-        
-        debugLogger.logStep('SERVICE_METHOD_START', {
-            method: 'createProjectIdea',
-            sessionId
-        }, 'START');
-
-        const result = await this.projectService.createProjectIdea(userId, originalIdea);
-
-        console.log(`✅ [CONTROLLER] callServiceWithDebug COMPLETED`);
-        console.log(`${'='.repeat(80)}`);
-
-        debugLogger.logStep('SERVICE_METHOD_COMPLETE', {
-            success: result.success,
-            hasProject: !!result.project,
-            sessionId
-        }, 'SUCCESS');
-
-        return result;
-    }
-
-    // [CORRIGIDO] Outros métodos com validação UUID
-    getUserProjects = async (req, res, next) => {
+    getUserProjects = async (req, res) => {
         try {
             const userId = req.user.id;
-            const {
-                status = null,
-                limit = 20,
-                offset = 0,
-                order_by = 'created_at',
-                order_direction = 'DESC'
-            } = req.query;
+            const { status, limit = 20, offset = 0 } = req.query;
 
-            const options = {
+            const filters = {
                 status,
                 limit: parseInt(limit),
-                offset: parseInt(offset),
-                orderBy: order_by,
-                orderDirection: order_direction.toUpperCase()
+                offset: parseInt(offset)
             };
 
-            const result = await this.projectService.getUserProjects(userId, options);
+            const result = await this.projectService.getUserProjects(userId, filters);
 
-            ResponseHelper.success(res, result, 'Projetos obtidos com sucesso');
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Projetos obtidos com sucesso',
+                data: result.data,
+                timestamp: new Date().toISOString()
+            });
+
         } catch (error) {
-            next(error);
+            console.error('❌ [CONTROLLER] Erro ao listar projetos:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
         }
     };
 
-    getProjectById = async (req, res, next) => {
+    /**
+     * Buscar projeto por ID
+     */
+    getProjectById = async (req, res) => {
         try {
-            const userId = req.user.id;
             const { projectId } = req.params;
+            const userId = req.user.id;
 
-            // [CORRIGIDO] Validação UUID em vez de número
-            if (!projectId || !this.isValidUUID(projectId)) {
-                return ResponseHelper.badRequest(res, 'ID do projeto inválido');
-            }
+            const result = await this.projectService.getProjectById(projectId, userId);
 
-            // [CORRIGIDO] Não fazer parseInt do UUID
-            const result = await this.projectService.getProjectById(userId, projectId);
-            
-            ResponseHelper.success(res, result.project, 'Projeto obtido com sucesso');
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Projeto encontrado',
+                data: result.data,
+                timestamp: new Date().toISOString()
+            });
+
         } catch (error) {
-            if (error.message.includes('não encontrado') || error.message.includes('não autorizado')) {
-                return ResponseHelper.notFound(res, error.message);
-            }
-            next(error);
+            console.error('❌ [CONTROLLER] Erro ao buscar projeto:', error);
+            
+            const statusCode = error.message.includes('não encontrado') || error.message.includes('Acesso negado') 
+                ? StatusCodes.NOT_FOUND 
+                : StatusCodes.INTERNAL_SERVER_ERROR;
+
+            return res.status(statusCode).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
         }
     };
 
-    getPendingProjects = async (req, res, next) => {
+    /**
+     * Aprovar projeto
+     */
+    approveProject = async (req, res) => {
         try {
-            const userId = req.user.id;
-            
-            const pendingProjects = await this.projectService.getPendingProjects(userId);
-            
-            ResponseHelper.success(res, { 
-                projects: pendingProjects,
-                total: pendingProjects.length 
-            }, 'Projetos pendentes obtidos com sucesso');
-        } catch (error) {
-            next(error);
-        }
-    };
-
-    approveProject = async (req, res, next) => {
-        try {
-            const userId = req.user.id;
             const { projectId } = req.params;
+            const userId = req.user.id;
 
-            // [CORRIGIDO] Validação UUID em vez de número
-            if (!projectId || !this.isValidUUID(projectId)) {
-                return ResponseHelper.badRequest(res, 'ID do projeto inválido');
-            }
+            const result = await this.projectService.approveProject(projectId, userId);
 
-            // [CORRIGIDO] Não fazer parseInt do UUID
-            const result = await this.projectService.approveProject(userId, projectId);
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: result.message,
+                data: {
+                    project: result.project
+                },
+                timestamp: new Date().toISOString()
+            });
 
-            if (!result.success) {
-                return ResponseHelper.badRequest(res, result.error, result);
-            }
-
-            ResponseHelper.success(res, result.project, result.message);
         } catch (error) {
-            if (error.message.includes('não encontrado') || error.message.includes('não autorizado')) {
-                return ResponseHelper.notFound(res, error.message);
-            }
-            if (error.message.includes('não está pendente')) {
-                return ResponseHelper.badRequest(res, error.message);
-            }
-            next(error);
+            console.error('❌ [CONTROLLER] Erro ao aprovar projeto:', error);
+            return res.status(StatusCodes.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
         }
     };
 
-    rejectProject = async (req, res, next) => {
+    /**
+     * Rejeitar projeto
+     */
+    rejectProject = async (req, res) => {
         try {
-            const userId = req.user.id;
-            const { projectId } = req.params;
-            const { reason } = req.body;
-
-            // [CORRIGIDO] Validação UUID em vez de número
-            if (!projectId || !this.isValidUUID(projectId)) {
-                return ResponseHelper.badRequest(res, 'ID do projeto inválido');
-            }
-
-            if (!reason || reason.trim().length === 0) {
-                return ResponseHelper.badRequest(res, 'Motivo da rejeição é obrigatório');
-            }
-
-            // [CORRIGIDO] Não fazer parseInt do UUID
-            const result = await this.projectService.rejectProject(userId, projectId, reason);
-
-            ResponseHelper.success(res, result.project, result.message);
-        } catch (error) {
-            if (error.message.includes('não encontrado') || error.message.includes('não autorizado')) {
-                return ResponseHelper.notFound(res, error.message);
-            }
-            if (error.message.includes('não está pendente')) {
-                return ResponseHelper.badRequest(res, error.message);
-            }
-            next(error);
-        }
-    };
-
-    cancelProject = async (req, res, next) => {
-        try {
-            const userId = req.user.id;
             const { projectId } = req.params;
             const { reason } = req.body;
-
-            // [CORRIGIDO] Validação UUID em vez de número
-            if (!projectId || !this.isValidUUID(projectId)) {
-                return ResponseHelper.badRequest(res, 'ID do projeto inválido');
-            }
-
-            if (!reason || reason.trim().length === 0) {
-                return ResponseHelper.badRequest(res, 'Motivo do cancelamento é obrigatório');
-            }
-
-            // [CORRIGIDO] Não fazer parseInt do UUID
-            const result = await this.projectService.cancelProject(userId, projectId, reason);
-
-            ResponseHelper.success(res, result.project, result.message);
-        } catch (error) {
-            if (error.message.includes('não encontrado') || error.message.includes('não autorizado')) {
-                return ResponseHelper.notFound(res, error.message);
-            }
-            if (error.message.includes('não pode ser cancelado')) {
-                return ResponseHelper.badRequest(res, error.message);
-            }
-            next(error);
-        }
-    };
-
-    getSystemStatus = async (req, res, next) => {
-        try {
-            // [CORRIGIDO] Método correto do service
-            const status = await this.projectService.getSystemStatus();
-            
-            ResponseHelper.success(res, status, 'Status do sistema obtido');
-        } catch (error) {
-            next(error);
-        }
-    };
-
-    executeProjectJob = async (req, res, next) => {
-        try {
-            // [CORRIGIDO] Método correto do service
-            const result = await this.executionService.executeJobManually();
-            
-            if (result.success) {
-                ResponseHelper.success(res, result, 'Job executada com sucesso');
-            } else {
-                ResponseHelper.error(res, result.error || 'Falha na execução da job', 500);
-            }
-        } catch (error) {
-            next(error);
-        }
-    };
-
-    getExecutionStats = async (req, res, next) => {
-        try {
-            // [CORRIGIDO] Método correto do service
-            const stats = await this.executionService.getExecutionStats();
-            
-            ResponseHelper.success(res, stats, 'Estatísticas obtidas com sucesso');
-        } catch (error) {
-            next(error);
-        }
-    };
-
-    getPendingExecutions = async (req, res, next) => {
-        try {
-            // [CORRIGIDO] Método correto do service
-            const pending = await this.executionService.getPendingExecutions();
-            
-            ResponseHelper.success(res, pending, 'Execuções pendentes obtidas');
-        } catch (error) {
-            next(error);
-        }
-    };
-
-    searchProjects = async (req, res, next) => {
-        try {
             const userId = req.user.id;
-            const searchParams = req.query;
-            
-            const results = await this.projectService.searchProjects(userId, searchParams);
-            
-            ResponseHelper.success(res, results, 'Busca realizada com sucesso');
+            const result = await this.projectService.rejectProject(projectId, reason, userId);
+
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: result.message,
+                data: {
+                    project: result.project
+                },
+                timestamp: new Date().toISOString()
+            });
+
         } catch (error) {
-            next(error);
+            console.error('❌ [CONTROLLER] Erro ao rejeitar projeto:', error);
+            return res.status(StatusCodes.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * Cancelar projeto
+     */
+    cancelProject = async (req, res) => {
+        try {
+            const { projectId } = req.params;
+            const { reason } = req.body;
+            const userId = req.user.id;
+
+            const result = await this.projectService.cancelProject(projectId, reason, userId);
+
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: result.message,
+                data: {
+                    project: result.project
+                },
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao cancelar projeto:', error);
+            return res.status(StatusCodes.BAD_REQUEST).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * Verificar status do sistema de IA
+     */
+    getSystemStatus = async (req, res) => {
+        try {
+            const aiStatus = await OpenAIConnectionTest.testConnection();
+            
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Status do sistema obtido',
+                data: {
+                    ai_system: aiStatus,
+                    server_time: new Date().toISOString(),
+                    system_healthy: aiStatus.connected
+                },
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao verificar status:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: 'Erro ao verificar status do sistema',
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * [CORRIGIDO] Executar job de projetos manualmente (admin)
+     */
+    executeProjectJob = async (req, res) => {
+        try {
+            console.log('🔧 [ADMIN] Executando job de projetos manualmente...');
+
+            const result = await this.projectService.executeJobManually();
+
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Job de projetos executada com sucesso',
+                data: result,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao executar job:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * Obter estatísticas de execução (admin)
+     */
+    getExecutionStats = async (req, res) => {
+        try {
+            const stats = await this.projectService.getExecutionStats();
+
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Estatísticas obtidas com sucesso',
+                data: stats,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao obter estatísticas:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * Obter execuções pendentes (admin)
+     */
+    getPendingExecutions = async (req, res) => {
+        try {
+            const { limit = 50 } = req.query;
+
+            const result = await this.projectService.getPendingExecutions(parseInt(limit));
+
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Execuções pendentes obtidas',
+                data: result.data,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao buscar execuções pendentes:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
+        }
+    };
+
+    /**
+     * Buscar projetos com filtros avançados (admin)
+     */
+    searchProjects = async (req, res) => {
+        try {
+            const {
+                status,
+                state_id,
+                date_from,
+                date_to,
+                page = 1,
+                limit = 20
+            } = req.query;
+
+            // Implementar busca avançada se necessário
+            // Por enquanto, retornar resposta básica
+            return res.status(StatusCodes.OK).json({
+                success: true,
+                message: 'Busca avançada não implementada ainda',
+                data: {
+                    projects: [],
+                    total: 0,
+                    filters_applied: {
+                        status,
+                        state_id,
+                        date_from,
+                        date_to,
+                        page: parseInt(page),
+                        limit: parseInt(limit)
+                    }
+                },
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro na busca avançada:', error);
+            return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            });
         }
     };
 }

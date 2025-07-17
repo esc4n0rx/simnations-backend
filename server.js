@@ -18,15 +18,16 @@ const governmentProjectRoutes = require('./src/presentation/routes/government-pr
 // Importar utils
 const { testConnection } = require('./src/infrastructure/database/supabase-client');
 
-// [CORRIGIDO] Importar job econômica e constantes
+// Importar jobs
 const EconomicUpdateJob = require('./src/infrastructure/jobs/economic-update-job');
-const { ECONOMIC_CONSTANTS } = require('./src/shared/constants/economic-constants');
+const ProjectExecutionService = require('./src/application/services/project-execution-service');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Instância da job econômica
+// Instâncias das jobs
 let economicJob = null;
+let projectExecutionService = null;
 
 // Configuração de Rate Limiting
 const limiter = rateLimit({
@@ -64,7 +65,8 @@ app.get('/health', (req, res) => {
         message: 'SimNations Backend está funcionando!',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        economic_job_status: economicJob ? economicJob.isRunning() : 'not_initialized'
+        economic_job_status: economicJob ? 'Ativa' : 'Inativa',
+        project_execution_job_status: projectExecutionService ? 'Ativa' : 'Inativa'
     });
 });
 
@@ -86,7 +88,7 @@ apiRouter.use('/state', stateRoutes);
 // Rotas de eventos políticos
 apiRouter.use('/political-events', politicalEventRoutes);
 
-// [CORRIGIDO] Rotas de projetos governamentais
+// Rotas de projetos governamentais
 apiRouter.use('/government-projects', governmentProjectRoutes);
 
 // Aplicar todas as rotas da API com prefixo /api
@@ -103,6 +105,10 @@ async function initializeJobs() {
         // Inicializar job econômica
         economicJob = new EconomicUpdateJob();
         await economicJob.start();
+        
+        // [CORRIGIDO] Inicializar job de execução de projetos
+        projectExecutionService = new ProjectExecutionService();
+        // A job já é inicializada automaticamente no construtor
         
         console.log('✅ Jobs inicializadas com sucesso');
     } catch (error) {
@@ -133,6 +139,7 @@ async function startServer() {
 📊 Health Check: http://localhost:${PORT}/health
 📚 API Base: http://localhost:${PORT}/api
 ⏰ Job Econômica: ${economicJob ? 'Ativa' : 'Inativa'}
+🎯 Job de Projetos: ${projectExecutionService ? 'Ativa' : 'Inativa'}
             `);
         });
         
