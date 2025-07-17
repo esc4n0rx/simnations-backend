@@ -1,0 +1,701 @@
+{
+    "feature": "Sistema de Projetos Governamentais",
+    "version": "1.0.0",
+    "description": "Sistema completo para criação, refinamento, análise e execução de projetos públicos com IA",
+    "base_url": "http://localhost:3000/api/government-projects",
+    "authentication": "Bearer Token JWT obrigatório em todas as rotas",
+    
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/",
+        "name": "Criar Nova Ideia de Projeto",
+        "description": "Permite ao governador criar uma nova ideia de projeto que será processada pelos agentes de IA",
+        "authentication": true,
+        "headers": {
+          "Authorization": "Bearer JWT_TOKEN",
+          "Content-Type": "application/json"
+        },
+        "payload": {
+          "original_idea": "string (10-1000 caracteres)"
+        },
+        "payload_example": {
+          "original_idea": "Quero criar um cartão único para transporte público que funcione no metrô, ônibus e trem, facilitando a vida dos cidadãos e reduzindo filas"
+        },
+        "validation_rules": {
+          "original_idea": {
+            "required": true,
+            "type": "string",
+            "min_length": 10,
+            "max_length": 1000,
+            "security_check": true
+          }
+        },
+        "success_response": {
+          "status": 201,
+          "body": {
+            "success": true,
+            "message": "Projeto criado e sendo processado pelos agentes de IA",
+            "data": {
+              "id": 1,
+              "user_id": 123,
+              "state_id": 5,
+              "original_idea": "Quero criar um cartão único para transporte público...",
+              "refined_project": null,
+              "analysis_data": null,
+              "population_reaction": null,
+              "status": "draft",
+              "created_at": "2025-07-17T12:00:00.000Z",
+              "approved_at": null,
+              "started_at": null,
+              "completed_at": null,
+              "estimated_completion": null,
+              "refinement_attempts": 0,
+              "rejection_reason": null,
+              "processing_logs": [
+                {
+                  "timestamp": "2025-07-17T12:00:00.000Z",
+                  "message": "Projeto criado e enviado para refinamento"
+                }
+              ]
+            }
+          }
+        },
+        "error_responses": [
+          {
+            "status": 400,
+            "condition": "Ideia muito curta",
+            "body": {
+              "success": false,
+              "error": "Ideia muito curta. Forneça mais detalhes sobre sua proposta"
+            }
+          },
+          {
+            "status": 400,
+            "condition": "Limite de projetos atingido",
+            "body": {
+              "success": false,
+              "error": "Limite de projetos ativos atingido",
+              "details": {
+                "canCreate": false,
+                "reason": "Limite de projetos ativos atingido",
+                "activeCount": 5,
+                "maxAllowed": 5
+              }
+            }
+          },
+          {
+            "status": 400,
+            "condition": "Conteúdo inadequado",
+            "body": {
+              "success": false,
+              "error": "Conteúdo inadequado detectado. Propostas devem ser éticas e legais"
+            }
+          }
+        ]
+      },
+      
+      {
+        "method": "GET",
+        "path": "/",
+        "name": "Listar Projetos do Usuário",
+        "description": "Lista todos os projetos do usuário com opções de filtro e paginação",
+        "authentication": true,
+        "query_parameters": {
+          "status": "string (opcional) - Filtro por status: draft, pending_approval, approved, rejected, in_execution, completed, cancelled",
+          "limit": "integer (opcional, 1-100, padrão: 20) - Limite de registros",
+          "offset": "integer (opcional, padrão: 0) - Deslocamento para paginação",
+          "order_by": "string (opcional, padrão: created_at) - Campo de ordenação: created_at, updated_at, approved_at, started_at, completed_at",
+          "order_direction": "string (opcional, padrão: DESC) - Direção: ASC ou DESC"
+        },
+        "example_url": "/api/government-projects?status=pending_approval&limit=10&order_by=created_at&order_direction=DESC",
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projetos obtidos com sucesso",
+            "data": {
+              "projects": [
+                {
+                  "id": 1,
+                  "user_id": 123,
+                  "state_id": 5,
+                  "original_idea": "Cartão único de transporte...",
+                  "refined_project": {
+                    "name": "Sistema Integrado de Transporte Metropolitano",
+                    "objective": "Modernizar e integrar o sistema de transporte público",
+                    "description": "Implementação de cartão único...",
+                    "justification": "Melhoria da mobilidade urbana...",
+                    "target_population": "2.5 milhões de usuários de transporte público",
+                    "expected_impacts": {
+                      "economic": ["Redução de custos operacionais", "Aumento da arrecadação"],
+                      "social": ["Melhoria da mobilidade", "Redução do tempo de viagem"]
+                    },
+                    "project_type": "transportation",
+                    "refined_at": "2025-07-17T12:05:00.000Z"
+                  },
+                  "analysis_data": {
+                    "implementation_cost": 15000000,
+                    "execution_method": "installments",
+                    "installments_config": {
+                      "number_of_installments": 12,
+                      "installment_amount": 1250000,
+                      "payment_frequency": "monthly"
+                    },
+                    "estimated_duration_months": 18,
+                    "technical_feasibility": "medium",
+                    "required_resources": ["Tecnologia RFID", "Sistema de integração", "Treinamento de equipes"],
+                    "potential_risks": [
+                      {
+                        "risk": "Atrasos na implementação tecnológica",
+                        "probability": "medium",
+                        "impact": "medium"
+                      }
+                    ],
+                    "economic_return_projection": {
+                      "revenue_increase_monthly": 500000,
+                      "cost_savings_monthly": 200000,
+                      "payback_period_months": 24
+                    },
+                    "social_impact_projection": {
+                      "population_directly_impacted": 2500000,
+                      "quality_of_life_improvement": "high",
+                      "employment_generation": 150
+                    }
+                  },
+                  "status": "pending_approval",
+                  "created_at": "2025-07-17T12:00:00.000Z",
+                  "can_be_approved": true,
+                  "is_active": true
+                }
+              ],
+              "stats": {
+                "total": 8,
+                "draft": 1,
+                "pending_approval": 2,
+                "approved": 1,
+                "rejected": 1,
+                "in_execution": 2,
+                "completed": 1,
+                "cancelled": 0
+              },
+              "total": 8
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/pending",
+        "name": "Obter Projetos Pendentes",
+        "description": "Lista apenas os projetos que estão aguardando aprovação do governador",
+        "authentication": true,
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projetos pendentes obtidos com sucesso",
+            "data": {
+              "projects": [
+                {
+                  "id": 1,
+                  "refined_project": {
+                    "name": "Sistema Integrado de Transporte Metropolitano",
+                    "objective": "Modernizar e integrar o sistema de transporte público"
+                  },
+                  "analysis_data": {
+                    "implementation_cost": 15000000,
+                    "execution_method": "installments",
+                    "estimated_duration_months": 18
+                  },
+                  "status": "pending_approval",
+                  "created_at": "2025-07-17T12:00:00.000Z"
+                }
+              ],
+              "total": 1
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/:projectId",
+        "name": "Obter Projeto Específico",
+        "description": "Retorna detalhes completos de um projeto específico",
+        "authentication": true,
+        "path_parameters": {
+          "projectId": "integer - ID do projeto"
+        },
+        "example_url": "/api/government-projects/1",
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projeto obtido com sucesso",
+            "data": {
+              "id": 1,
+              "user_id": 123,
+              "state_id": 5,
+              "original_idea": "Quero criar um cartão único...",
+              "refined_project": { "..." : "dados completos do projeto refinado" },
+              "analysis_data": { "..." : "dados completos da análise" },
+              "population_reaction": {
+                "public_opinion": "A população demonstra entusiasmo com a iniciativa...",
+                "sector_reactions": [
+                  {
+                    "sector": "Empresários de transporte",
+                    "reaction": "Apoiam a modernização do sistema"
+                  }
+                ],
+                "approval_impact": 2.5,
+                "protest_level": 0,
+                "media_coverage": "positive"
+              },
+              "status": "in_execution",
+              "processing_logs": [
+                {
+                  "timestamp": "2025-07-17T12:00:00.000Z",
+                  "message": "Projeto criado e enviado para refinamento"
+                },
+                {
+                  "timestamp": "2025-07-17T12:05:00.000Z",
+                  "message": "Projeto refinado com sucesso pelo Agente 1"
+                }
+              ]
+            }
+          }
+        },
+        "error_responses": [
+          {
+            "status": 404,
+            "condition": "Projeto não encontrado",
+            "body": {
+              "success": false,
+              "error": "Projeto não encontrado"
+            }
+          },
+          {
+            "status": 403,
+            "condition": "Usuário não autorizado",
+            "body": {
+              "success": false,
+              "error": "Usuário não autorizado a visualizar este projeto"
+            }
+          }
+        ]
+      },
+  
+      {
+        "method": "PUT",
+        "path": "/:projectId/approve",
+        "name": "Aprovar Projeto",
+        "description": "Aprova um projeto pendente, iniciando sua execução",
+        "authentication": true,
+        "path_parameters": {
+          "projectId": "integer - ID do projeto"
+        },
+        "payload": {},
+        "example_url": "/api/government-projects/1/approve",
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projeto aprovado e execução iniciada",
+            "data": {
+              "id": 1,
+              "status": "approved",
+              "approved_at": "2025-07-17T12:30:00.000Z",
+              "processing_logs": [
+                {
+                  "timestamp": "2025-07-17T12:30:00.000Z",
+                  "message": "Projeto aprovado pelo governador"
+                }
+              ]
+            }
+          }
+        },
+        "error_responses": [
+          {
+            "status": 400,
+            "condition": "Recursos insuficientes",
+            "body": {
+              "success": false,
+              "error": "Recursos insuficientes no tesouro",
+              "required": 15000000,
+              "available": 10000000
+            }
+          },
+          {
+            "status": 400,
+            "condition": "Status inválido",
+            "body": {
+              "success": false,
+              "error": "Projeto não está pendente de aprovação"
+            }
+          }
+        ]
+      },
+  
+      {
+        "method": "PUT",
+        "path": "/:projectId/reject",
+        "name": "Rejeitar Projeto",
+        "description": "Rejeita um projeto pendente com justificativa",
+        "authentication": true,
+        "path_parameters": {
+          "projectId": "integer - ID do projeto"
+        },
+        "payload": {
+          "reason": "string (5-500 caracteres) - Motivo da rejeição"
+        },
+        "payload_example": {
+          "reason": "Custo muito elevado para o orçamento atual do estado"
+        },
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projeto rejeitado",
+            "data": {
+              "id": 1,
+              "status": "rejected",
+              "rejection_reason": "Custo muito elevado para o orçamento atual do estado",
+              "processing_logs": [
+                {
+                  "timestamp": "2025-07-17T12:35:00.000Z",
+                  "message": "Projeto rejeitado pelo governador: Custo muito elevado para o orçamento atual do estado"
+                }
+              ]
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "PUT",
+        "path": "/:projectId/cancel",
+        "name": "Cancelar Projeto",
+        "description": "Cancela um projeto em qualquer status (exceto concluído/cancelado)",
+        "authentication": true,
+        "path_parameters": {
+          "projectId": "integer - ID do projeto"
+        },
+        "payload": {
+          "reason": "string (5-500 caracteres) - Motivo do cancelamento"
+        },
+        "payload_example": {
+          "reason": "Mudança de prioridades governamentais devido à crise econômica"
+        },
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Projeto cancelado",
+            "data": {
+              "id": 1,
+              "status": "cancelled",
+              "processing_logs": [
+                {
+                  "timestamp": "2025-07-17T12:40:00.000Z",
+                  "message": "Projeto cancelado: Mudança de prioridades governamentais devido à crise econômica"
+                }
+              ]
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/system/status",
+        "name": "Status do Sistema de IA",
+        "description": "Verifica se todos os agentes de IA estão funcionando corretamente",
+        "authentication": true,
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Status do sistema obtido",
+            "data": {
+              "llm_provider_available": true,
+              "model_info": {
+                "provider": "Groq",
+                "model": "llama3-8b-8192",
+                "max_tokens": 2000,
+                "temperature": 0.3,
+                "supports_json": true,
+                "api_key_configured": true
+              },
+              "agents_status": {
+                "refinement_agent": true,
+                "analysis_agent": true,
+                "population_agent": true
+              },
+              "system_ready": true,
+              "last_check": "2025-07-17T12:45:00.000Z"
+            }
+          }
+        },
+        "error_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Status do sistema obtido",
+            "data": {
+              "llm_provider_available": false,
+              "model_info": null,
+              "agents_status": {
+                "refinement_agent": false,
+                "analysis_agent": false,
+                "population_agent": false
+              },
+              "system_ready": false,
+              "error": "API key not configured",
+              "last_check": "2025-07-17T12:45:00.000Z"
+            }
+          }
+        }
+      }
+    ],
+  
+    "admin_endpoints": [
+      {
+        "method": "POST",
+        "path": "/admin/execute-job",
+        "name": "Executar Job Manualmente",
+        "description": "Executa manualmente o processamento de projetos (desenvolvimento)",
+        "authentication": true,
+        "admin_required": true,
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Job executada com sucesso",
+            "data": {
+              "success": true,
+              "execution_time_ms": 1250,
+              "executed_at": "2025-07-17T12:50:00.000Z"
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/admin/execution-stats",
+        "name": "Estatísticas de Execução",
+        "description": "Retorna estatísticas das execuções de projetos",
+        "authentication": true,
+        "admin_required": true,
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Estatísticas obtidas com sucesso",
+            "data": {
+              "payment": {
+                "pending": 5,
+                "executed": 23,
+                "failed": 1
+              },
+              "effect": {
+                "pending": 3,
+                "executed": 8,
+                "failed": 0
+              },
+              "completion": {
+                "pending": 2,
+                "executed": 6,
+                "failed": 0
+              },
+              "total": {
+                "pending": 10,
+                "executed": 37,
+                "failed": 1
+              }
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/admin/pending-executions",
+        "name": "Execuções Pendentes",
+        "description": "Lista todas as execuções agendadas pendentes",
+        "authentication": true,
+        "admin_required": true,
+        "query_parameters": {
+          "limit": "integer (opcional, padrão: 50) - Limite de registros"
+        },
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Execuções pendentes obtidas",
+            "data": {
+              "executions": [
+                {
+                  "id": 15,
+                  "project_id": 3,
+                  "execution_type": "payment",
+                  "scheduled_for": "2025-08-17T12:00:00.000Z",
+                  "payment_amount": "1250000.00",
+                  "installment_number": 2,
+                  "total_installments": 12,
+                  "status": "pending",
+                  "project": {
+                    "id": 3,
+                    "user_id": 123,
+                    "refined_project": {
+                      "name": "Sistema Integrado de Transporte"
+                    }
+                  }
+                }
+              ],
+              "total": 1
+            }
+          }
+        }
+      },
+  
+      {
+        "method": "GET",
+        "path": "/admin/search",
+        "name": "Busca Avançada de Projetos",
+        "description": "Busca projetos com filtros avançados (admin)",
+        "authentication": true,
+        "admin_required": true,
+        "query_parameters": {
+          "user_id": "integer (opcional) - Filtro por usuário",
+          "state_id": "integer (opcional) - Filtro por estado",
+          "status": "string (opcional) - Filtro por status",
+          "project_type": "string (opcional) - Filtro por tipo",
+          "start_date": "string (opcional) - Data início (YYYY-MM-DD)",
+          "end_date": "string (opcional) - Data fim (YYYY-MM-DD)",
+          "search": "string (opcional) - Busca textual",
+          "page": "integer (opcional, padrão: 1) - Página",
+          "limit": "integer (opcional, padrão: 20) - Registros por página"
+        },
+        "example_url": "/admin/search?status=in_execution&project_type=transportation&page=1&limit=10",
+        "success_response": {
+          "status": 200,
+          "body": {
+            "success": true,
+            "message": "Busca realizada com sucesso",
+            "data": {
+              "projects": [
+                {
+                  "id": 1,
+                  "user_id": 123,
+                  "refined_project": {
+                    "name": "Sistema Integrado de Transporte",
+                    "project_type": "transportation"
+                  },
+                  "status": "in_execution",
+                  "user": {
+                    "id": 123,
+                    "email": "governador@estado.com",
+                    "name": "João Governador"
+                  },
+                  "state": {
+                    "id": 5,
+                    "name": "São Paulo",
+                    "acronym": "SP"
+                  }
+                }
+              ],
+              "pagination": {
+                "total": 25,
+                "page": 1,
+                "limit": 10,
+                "pages": 3
+              }
+            }
+          }
+        }
+      }
+    ],
+  
+    "project_statuses": {
+      "draft": "Projeto criado, aguardando processamento da IA",
+      "pending_approval": "Projeto refinado e analisado, aguardando decisão do governador",
+      "approved": "Projeto aprovado, preparando execução",
+      "rejected": "Projeto rejeitado pelo governador ou pela IA",
+      "in_execution": "Projeto em execução, efeitos sendo aplicados",
+      "completed": "Projeto concluído com sucesso",
+      "cancelled": "Projeto cancelado pelo governador"
+    },
+  
+    "project_types": [
+      "infrastructure",
+      "education", 
+      "healthcare",
+      "technology",
+      "environment",
+      "security",
+      "transportation",
+      "housing",
+      "culture",
+      "economy"
+    ],
+  
+    "security_features": {
+      "content_filtering": "Sistema detecta e rejeita conteúdo inadequado",
+      "prompt_injection_protection": "Proteção contra tentativas de manipulação da IA",
+      "rate_limiting": "Limite de projetos por usuário e cooldown entre criações",
+      "resource_validation": "Verificação de recursos disponíveis antes da aprovação",
+      "audit_logging": "Log completo de todas as operações"
+    },
+  
+    "ai_agents": {
+      "agent_1_refinement": {
+        "purpose": "Transforma ideia do jogador em projeto técnico governamental",
+        "security": "Aplica filtros de segurança e valida viabilidade",
+        "output": "Projeto estruturado com nome, objetivo, descrição e impactos"
+      },
+      "agent_2_analysis": {
+        "purpose": "Analisa viabilidade técnica e financeira do projeto",
+        "calculations": "Custos, recursos, riscos, retornos e cronograma",
+        "output": "Análise completa para tomada de decisão"
+      },
+      "agent_3_population": {
+        "purpose": "Simula reação da população ao projeto aprovado",
+        "simulation": "Opinião pública, reações setoriais e impacto na aprovação",
+        "output": "Reação realista baseada no contexto do estado"
+      }
+    },
+  
+    "automated_execution": {
+      "job_frequency": "Executa a cada hora automaticamente",
+      "payment_processing": "Débito automático de parcelas agendadas",
+      "effect_application": "Aplicação de benefícios na data de conclusão",
+      "project_completion": "Finalização automática dos projetos"
+    },
+  
+    "examples": {
+      "transportation_project": {
+        "original_idea": "Quero criar um cartão único para metrô e ônibus",
+        "refined_name": "Sistema Integrado de Transporte Metropolitano",
+        "cost": 15000000,
+        "duration": 18,
+        "benefits": "Modernização da mobilidade urbana"
+      },
+      "education_project": {
+        "original_idea": "Construir escolas técnicas profissionalizantes",
+        "refined_name": "Programa de Expansão da Educação Técnica",
+        "cost": 25000000,
+        "duration": 24,
+        "benefits": "Capacitação profissional da população"
+      },
+      "technology_project": {
+        "original_idea": "Criar incubadora para startups de tecnologia",
+        "refined_name": "Hub de Inovação e Empreendedorismo Tecnológico",
+        "cost": 8000000,
+        "duration": 12,
+        "benefits": "Fomento ao ecossistema de inovação"
+      }
+    }
+  }
