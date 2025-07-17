@@ -1,62 +1,111 @@
 const cron = require('node-cron');
-const GovernmentProjectRepository = require('../../domain/repositories/government-project-repository');
 const ProjectExecutionRepository = require('../../domain/repositories/project-execution-repository');
+const GovernmentProjectRepository = require('../../domain/repositories/government-project-repository');
 const StateRepository = require('../../domain/repositories/state-repository');
-const { PROJECT_STATUS } = require('../../shared/constants/government-project-constants');
 
 class ProjectExecutionService {
     constructor() {
+        this.executionRepository = new ProjectExecutionRepository();
         this.projectRepository = new GovernmentProjectRepository();
         this.stateRepository = new StateRepository();
-        this.executionRepository = new ProjectExecutionRepository();
-        
-        // [CORRIGIDO] Iniciar job de execução automaticamente
-        this.startExecutionJob();
-        
-        console.log('🎯 ProjectExecutionService inicializado com job automática');
     }
 
     /**
      * Processar execuções pendentes
-     * @returns {Promise<void>}
+     * @returns {Promise<Object>} - Resultado da execução
      */
     async processPendingExecutions() {
         try {
-            console.log('🔍 Verificando execuções pendentes...');
+            console.log('🔄 Iniciando processamento de execuções pendentes...');
 
-            const pendingExecutions = await this.getPendingExecutions(100);
+            const pendingExecutions = await this.getPendingExecutions();
             
             if (pendingExecutions.length === 0) {
-                console.log('✅ Nenhuma execução pendente encontrada');
-                return;
+                console.log('ℹ️ Nenhuma execução pendente encontrada');
+                return { processed: 0, errors: 0 };
             }
 
-            console.log(`📋 Processando ${pendingExecutions.length} execuções pendentes...`);
+            console.log(`📋 ${pendingExecutions.length} execuções pendentes encontradas`);
+
+            let processed = 0;
+            let errors = 0;
 
             for (const execution of pendingExecutions) {
                 try {
                     await this.processExecution(execution);
+                    await this.markExecutionAsExecuted(execution.id);
+                    processed++;
                 } catch (error) {
                     console.error(`❌ Erro ao processar execução ${execution.id}:`, error);
-                    // Marcar execução como com erro
-                    await this.executionRepository.update(execution.id, {
-                        status: 'failed',
-                        error_message: error.message,
-                        processed_at: new Date().toISOString()
-                    });
+                    await this.markExecutionAsFailed(execution.id, error.message);
+                    errors++;
                 }
             }
 
-            console.log(`✅ Processamento de execuções concluído`);
+            console.log(`✅ Processamento concluído: ${processed} sucessos, ${errors} erros`);
+
+            return { processed, errors };
 
         } catch (error) {
-            console.error('❌ Erro ao processar execuções pendentes:', error);
+            console.error('❌ Erro no processamento de execuções:', error);
             throw error;
         }
     }
 
     /**
-     * Agendar parcelas do projeto
+     * Marcar execução como executada
+     * @param {number} executionId - ID da execução
+     * @returns {Promise<void>}
+     */
+    async markExecutionAsExecuted(executionId) {
+        try {
+            const { error } = await this.executionRepository.supabase
+                .from('project_executions')
+                .update({
+                    status: 'executed',
+                    executed_at: new Date().toISOString()
+                })
+                .eq('id', executionId);
+
+            if (error) {
+                throw new Error(`Erro ao atualizar execução: ${error.message}`);
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao marcar execução como executada:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Marcar execução como falhada
+     * @param {number} executionId - ID da execução
+     * @param {string} errorMessage - Mensagem de erro
+     * @returns {Promise<void>}
+     */
+    async markExecutionAsFailed(executionId, errorMessage) {
+        try {
+            const { error } = await this.executionRepository.supabase
+                .from('project_executions')
+                .update({
+                    status: 'failed',
+                    error_message: errorMessage,
+                    executed_at: new Date().toISOString()
+                })
+                .eq('id', executionId);
+
+            if (error) {
+                throw new Error(`Erro ao atualizar execução: ${error.message}`);
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao marcar execução como falhada:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Agendar parcelas de pagamento
      * @param {string} projectId - ID do projeto
      * @param {Object} installmentsConfig - Configuração das parcelas
      * @returns {Promise<void>}
@@ -93,7 +142,29 @@ class ProjectExecutionService {
     }
 
     /**
-     * Agendar efeitos do projeto
+     * [CORRIGIDO] Validar e normalizar duração do projeto
+     * @param {number|undefined} estimatedDurationMonths - Duração estimada em meses
+     * @returns {number} - Duração validada em meses (máximo 0.5 mês = 2 semanas)
+     */
+    validateProjectDuration(estimatedDurationMonths) {
+        // Se não há duração estimada, usar padrão de 2 semanas (0.5 mês)
+        if (!estimatedDurationMonths || estimatedDurationMonths <= 0) {
+            return 0.5;
+        }
+
+        // Limitar a duração máxima a 0.5 mês (2 semanas)
+        const maxDurationMonths = 0.5;
+        
+        if (estimatedDurationMonths > maxDurationMonths) {
+            console.log(`⚠️ Duração de ${estimatedDurationMonths} meses é muito longa. Limitando a ${maxDurationMonths} mês (2 semanas)`);
+            return maxDurationMonths;
+        }
+
+        return estimatedDurationMonths;
+    }
+
+    /**
+     * [CORRIGIDO] Agendar efeitos do projeto
      * @param {string} projectId - ID do projeto  
      * @param {Object} projectData - Dados do projeto
      * @returns {Promise<void>}
@@ -102,14 +173,17 @@ class ProjectExecutionService {
         try {
             console.log(`🎯 Agendando efeitos para projeto ${projectId}...`);
 
-            if (!projectData.analysis_data?.estimated_duration_months) {
-                console.log('⚠️ Duração estimada não encontrada, usando padrão de 6 meses');
-                return;
-            }
+            // Validar e normalizar duração
+            const validatedDuration = this.validateProjectDuration(
+                projectData.analysis_data?.estimated_duration_months
+            );
 
             const currentDate = new Date();
             const effectDate = new Date(currentDate);
-            effectDate.setMonth(effectDate.getMonth() + projectData.analysis_data.estimated_duration_months);
+            
+            // Converter meses em dias (1 mês = 30 dias)
+            const daysToAdd = Math.floor(validatedDuration * 30);
+            effectDate.setDate(effectDate.getDate() + daysToAdd);
 
             const effectExecution = {
                 project_id: projectId,
@@ -128,7 +202,7 @@ class ProjectExecutionService {
     }
 
     /**
-     * Agendar conclusão do projeto
+     * [CORRIGIDO] Agendar conclusão do projeto
      * @param {string} projectId - ID do projeto
      * @param {Object} projectData - Dados do projeto
      * @returns {Promise<void>}
@@ -137,14 +211,17 @@ class ProjectExecutionService {
         try {
             console.log(`🏁 Agendando conclusão para projeto ${projectId}...`);
 
-            if (!projectData.analysis_data?.estimated_duration_months) {
-                console.log('⚠️ Duração estimada não encontrada, usando padrão de 6 meses');
-                return;
-            }
+            // Validar e normalizar duração
+            const validatedDuration = this.validateProjectDuration(
+                projectData.analysis_data?.estimated_duration_months
+            );
 
             const currentDate = new Date();
             const completionDate = new Date(currentDate);
-            completionDate.setMonth(completionDate.getMonth() + projectData.analysis_data.estimated_duration_months + 1);
+            
+            // Converter meses em dias e adicionar 1 semana extra para conclusão
+            const daysToAdd = Math.floor(validatedDuration * 30) + 7; // +7 dias para finalização
+            completionDate.setDate(completionDate.getDate() + daysToAdd);
 
             const completionExecution = {
                 project_id: projectId,
@@ -185,12 +262,6 @@ class ProjectExecutionService {
                     throw new Error(`Tipo de execução não reconhecido: ${execution.execution_type}`);
             }
 
-            // Marcar execução como processada
-            await this.executionRepository.update(execution.id, {
-                status: 'completed',
-                processed_at: new Date().toISOString()
-            });
-
             console.log(`✅ Execução ${execution.id} processada com sucesso`);
 
         } catch (error) {
@@ -200,34 +271,37 @@ class ProjectExecutionService {
     }
 
     /**
-     * Processar pagamento de parcela
+     * Processar pagamento/parcela
      * @param {Object} execution - Dados da execução
      * @returns {Promise<void>}
      */
     async processPayment(execution) {
         try {
-            console.log(`💰 Processando pagamento - Projeto ${execution.project_id} - Parcela ${execution.installment_number}`);
+            console.log(`💰 Processando pagamento de ${execution.payment_amount} para projeto ${execution.project_id}`);
 
-            // Buscar projeto
+            // Buscar estado do projeto
             const project = await this.projectRepository.findById(execution.project_id);
             if (!project) {
                 throw new Error('Projeto não encontrado');
             }
 
-            // Buscar dados do estado
-            const stateData = await this.stateRepository.getStateById(project.state_id);
-            if (!stateData) {
+            // Debitar valor do orçamento do estado
+            const state = await this.stateRepository.getStateById(project.state_id);
+            if (!state) {
                 throw new Error('Estado não encontrado');
             }
 
-            // Atualizar economia do estado (reduzir treasury_balance)
-            const newBalance = stateData.economy.treasury_balance - execution.payment_amount;
+            const newBudget = state.economy.budget - execution.payment_amount;
             
+            if (newBudget < 0) {
+                throw new Error(`Orçamento insuficiente. Disponível: ${state.economy.budget}, Necessário: ${execution.payment_amount}`);
+            }
+
             await this.stateRepository.updateEconomicData(project.state_id, {
-                treasury_balance: Math.max(0, newBalance) // Não deixar negativo
+                budget: newBudget
             });
 
-            console.log(`✅ Pagamento processado: -R$ ${execution.payment_amount}`);
+            console.log(`✅ Pagamento processado: ${execution.payment_amount} debitado do orçamento`);
 
         } catch (error) {
             console.error('❌ Erro ao processar pagamento:', error);
@@ -242,9 +316,9 @@ class ProjectExecutionService {
      */
     async processEffect(execution) {
         try {
-            console.log(`🎯 Aplicando efeitos - Projeto ${execution.project_id}`);
+            console.log(`🎯 Aplicando efeitos para projeto ${execution.project_id}`);
 
-            // Buscar projeto
+            // Buscar projeto com dados completos
             const project = await this.projectRepository.findById(execution.project_id);
             if (!project) {
                 throw new Error('Projeto não encontrado');
@@ -377,67 +451,10 @@ class ProjectExecutionService {
      */
     async executeJobManually() {
         try {
-            console.log('🔧 Execução manual da job de projetos...');
-            const startTime = Date.now();
-            
-            await this.processPendingExecutions();
-            
-            const executionTime = Date.now() - startTime;
-            
-            return {
-                success: true,
-                execution_time_ms: executionTime,
-                executed_at: new Date().toISOString()
-            };
+            console.log('🔧 Executando job manualmente...');
+            return await this.processPendingExecutions();
         } catch (error) {
-            console.error('❌ Erro na execução manual:', error);
-            return {
-                success: false,
-                error: error.message,
-                executed_at: new Date().toISOString()
-            };
-        }
-    }
-
-    /**
-     * Obter estatísticas de execução
-     * @returns {Promise<Object>}
-     */
-    async getExecutionStats() {
-        try {
-            const { data: stats, error } = await this.executionRepository.supabase
-                .from('project_executions')
-                .select('status, execution_type, created_at')
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                throw new Error(`Erro ao obter estatísticas: ${error.message}`);
-            }
-
-            const now = new Date();
-            const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-            const summary = {
-                total_executions: stats.length,
-                pending: stats.filter(s => s.status === 'pending').length,
-                completed: stats.filter(s => s.status === 'completed').length,
-                failed: stats.filter(s => s.status === 'failed').length,
-                last_24h: stats.filter(s => new Date(s.created_at) >= last24h).length,
-                by_type: {
-                    payment: stats.filter(s => s.execution_type === 'payment').length,
-                    effect: stats.filter(s => s.execution_type === 'effect').length,
-                    completion: stats.filter(s => s.execution_type === 'completion').length
-                }
-            };
-
-            return {
-                success: true,
-                data: summary,
-                generated_at: new Date().toISOString()
-            };
-
-        } catch (error) {
-            console.error('❌ Erro ao obter estatísticas:', error);
+            console.error('❌ Erro na execução manual da job:', error);
             throw error;
         }
     }
