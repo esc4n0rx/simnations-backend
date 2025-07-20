@@ -1,6 +1,6 @@
 {
     "api_version": "1.0.0",
-    "base_url": "http://localhost:3000/api",
+    "base_url": "https://api.routina.fun/api",
     "authentication": "Bearer Token required for protected endpoints",
     "routes": {
       "auth_register": {
