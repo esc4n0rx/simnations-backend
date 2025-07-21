@@ -1,5 +1,5 @@
 const GroqProvider = require('../../infrastructure/ai/groq-provider');
-const { CONSTRUCTION_CONSTANTS } = require('../../shared/constants/construction-constants');
+const CONSTRUCTION_CONSTANTS = require('../../shared/constants/construction-constants');
 
 class ConstructionAIService {
     constructor() {
@@ -10,12 +10,13 @@ class ConstructionAIService {
      * Gerar empresas para licitação usando IA
      * @param {Object} constructionData - Dados da construção
      * @param {Object} stateData - Dados do estado
-     * @returns {Promise<Array>} - Array de empresas geradas
+     * @returns {Promise<Object>} - Resultado com empresas geradas
      */
     async generateBiddingCompanies(constructionData, stateData) {
         try {
             console.log('🤖 Gerando empresas para licitação via IA...');
 
+            // CORREÇÃO: Usar CONSTRUCTION_CONSTANTS diretamente (não CONSTRUCTION_CONSTANTS.CONSTRUCTION_CONSTANTS)
             const numCompanies = this.getRandomBetween(
                 CONSTRUCTION_CONSTANTS.MIN_COMPANIES_PER_BIDDING,
                 CONSTRUCTION_CONSTANTS.MAX_COMPANIES_PER_BIDDING
@@ -44,9 +45,12 @@ class ConstructionAIService {
 
             console.log('📋 Contexto preparado para IA:', context);
 
-            // Enviar para IA
+            // CORREÇÃO: Usar generateResponse ao invés de generateCompletion
             const startTime = Date.now();
-            const aiResponse = await this.groqProvider.generateCompletion(prompt);
+            const aiResponse = await this.groqProvider.generateResponse(prompt, {
+                temperature: 0.7,
+                max_tokens: 2048
+            });
             const responseTime = Date.now() - startTime;
 
             console.log(`⚡ IA respondeu em ${responseTime}ms`);
@@ -58,16 +62,14 @@ class ConstructionAIService {
             
             return {
                 companies,
-                context,
+                context: context,
                 prompt_used: prompt,
                 response_time_ms: responseTime
             };
 
         } catch (error) {
             console.error('❌ Erro ao gerar empresas via IA:', error);
-            
-            // Fallback: gerar empresas básicas se IA falhar
-            return this.generateFallbackCompanies(constructionData);
+            throw error;
         }
     }
 
@@ -79,7 +81,7 @@ class ConstructionAIService {
      */
     async generateCompletionNarrative(constructionData, completionData) {
         try {
-            console.log('📝 Gerando narrativa de conclusão via IA...');
+            console.log('📖 Gerando narrativa de conclusão...');
 
             const context = {
                 constructionName: constructionData.construction_name,
@@ -98,7 +100,11 @@ class ConstructionAIService {
                 prompt = prompt.replace(new RegExp(`{${key}}`, 'g'), context[key]);
             });
 
-            const narrative = await this.groqProvider.generateCompletion(prompt);
+            // CORREÇÃO: Usar generateResponse ao invés de generateCompletion
+            const narrative = await this.groqProvider.generateResponse(prompt, {
+                temperature: 0.8,
+                max_tokens: 1024
+            });
             
             console.log('✅ Narrativa de conclusão gerada');
             return narrative;
@@ -117,33 +123,95 @@ class ConstructionAIService {
      */
     parseAICompaniesResponse(aiResponse, baseCost) {
         try {
+            console.log('🔍 Parseando resposta da IA...');
+            console.log('📄 Resposta recebida:', aiResponse.substring(0, 500) + '...');
+
+            let companies;
+            
             // Tentar parsear JSON diretamente
-            let companies = JSON.parse(aiResponse);
+            try {
+                companies = JSON.parse(aiResponse);
+            } catch (directParseError) {
+                console.log('⚠️ Parse direto falhou, tentando extrair JSON...');
+                
+                // Tentar extrair JSON entre blocos de código
+                const jsonMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+                if (jsonMatch) {
+                    companies = JSON.parse(jsonMatch[1]);
+                } else {
+                    // Tentar encontrar JSON simples
+                    const simpleJsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+                    if (simpleJsonMatch) {
+                        companies = JSON.parse(simpleJsonMatch[0]);
+                    } else {
+                        throw new Error('Não foi possível extrair JSON da resposta');
+                    }
+                }
+            }
             
             // Se não for array, tentar extrair array da resposta
             if (!Array.isArray(companies)) {
-                const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                    companies = JSON.parse(jsonMatch[0]);
+                if (companies.companies && Array.isArray(companies.companies)) {
+                    companies = companies.companies;
+                } else if (companies.empresas && Array.isArray(companies.empresas)) {
+                    companies = companies.empresas;
+                } else {
+                    throw new Error('Resposta não contém array de empresas');
                 }
             }
 
             // Validar e normalizar empresas
-            return companies.map((company, index) => ({
-                id: index + 1,
-                name: company.name || `Empresa ${index + 1}`,
-                proposed_price: this.validatePrice(company.proposed_price || company.preco_proposto, baseCost),
-                estimated_days: company.estimated_days || company.prazo_estimado || 365,
-                experience_level: company.experience_level || company.experiencia || 'média',
-                company_history: company.company_history || company.historico || 'Empresa consolidada no mercado',
-                corruption_offer: company.corruption_offer || company.incentivo_oculto || null,
-                quality_risk: company.quality_risk || company.risco_qualidade || 'baixo',
-                reliability_score: company.reliability_score || company.confiabilidade || 0.8
-            }));
+            const normalizedCompanies = companies.map((company, index) => {
+                console.log(`🏢 Processando empresa ${index + 1}:`, company.name || company.nome);
+                
+                return {
+                    id: index + 1,
+                    name: company.name || company.nome || `Empresa ${index + 1}`,
+                    proposed_price: this.validatePrice(
+                        company.proposed_price || 
+                        company.preco_proposto || 
+                        company.proposta_preco || 
+                        company.valor_proposto, 
+                        baseCost
+                    ),
+                    estimated_days: Math.max(1, 
+                        company.estimated_days || 
+                        company.prazo_estimado || 
+                        company.dias_estimados || 
+                        30
+                    ),
+                    experience_level: company.experience_level || 
+                                    company.experiencia || 
+                                    company.nivel_experiencia || 
+                                    'média',
+                    company_history: company.company_history || 
+                                   company.historico || 
+                                   company.historico_empresa || 
+                                   'Empresa consolidada no mercado',
+                    corruption_offer: this.parseCorruptionOffer(
+                        company.corruption_offer || 
+                        company.incentivo_oculto || 
+                        company.propina || 
+                        company.oferta_corrupcao
+                    ),
+                    quality_risk: company.quality_risk || 
+                                company.risco_qualidade || 
+                                'baixo',
+                    reliability_score: this.validateReliabilityScore(
+                        company.reliability_score || 
+                        company.confiabilidade || 
+                        company.score_confiabilidade
+                    )
+                };
+            });
+
+            console.log(`✅ ${normalizedCompanies.length} empresas parseadas com sucesso`);
+            return normalizedCompanies;
 
         } catch (error) {
             console.error('❌ Erro ao parsear resposta da IA:', error);
-            throw new Error('Resposta da IA inválida');
+            console.log('📄 Resposta problemática:', aiResponse);
+            throw new Error(`Resposta da IA inválida: ${error.message}`);
         }
     }
 
@@ -158,16 +226,60 @@ class ConstructionAIService {
         
         if (isNaN(numericPrice)) {
             // Se veio como string com "R$" ou formatação
-            numericPrice = parseFloat(price.toString().replace(/[R$\s.,]/g, ''));
+            const cleanPrice = price.toString().replace(/[R$\s.,]/g, '');
+            numericPrice = parseFloat(cleanPrice);
         }
         
         if (isNaN(numericPrice) || numericPrice <= 0) {
             // Fallback: gerar preço aleatório baseado no custo base
-            const variation = this.getRandomBetween(0.8, 1.3);
+            const variation = this.getRandomBetween(80, 130) / 100; // 0.8 a 1.3
             numericPrice = baseCost * variation;
         }
         
         return Number(numericPrice.toFixed(2));
+    }
+
+    /**
+     * Parsear oferta de corrupção
+     * @param {any} corruptionData - Dados de corrupção
+     * @returns {number} - Valor da propina ou 0
+     */
+    parseCorruptionOffer(corruptionData) {
+        if (!corruptionData) return 0;
+        
+        // Se é um número direto
+        if (typeof corruptionData === 'number') {
+            return Math.max(0, corruptionData);
+        }
+        
+        // Se é um objeto com amount
+        if (typeof corruptionData === 'object' && corruptionData.amount) {
+            return Math.max(0, parseFloat(corruptionData.amount) || 0);
+        }
+        
+        // Se é string com valor
+        if (typeof corruptionData === 'string') {
+            const numericValue = parseFloat(corruptionData.replace(/[R$\s.,]/g, ''));
+            return Math.max(0, numericValue || 0);
+        }
+        
+        return 0;
+    }
+
+    /**
+     * Validar score de confiabilidade
+     * @param {any} score - Score a validar
+     * @returns {number} - Score válido (0-1)
+     */
+    validateReliabilityScore(score) {
+        const numericScore = parseFloat(score);
+        
+        if (isNaN(numericScore)) {
+            return 0.8; // Valor padrão
+        }
+        
+        // Garantir que está entre 0 e 1
+        return Math.max(0, Math.min(1, numericScore));
     }
 
     /**
@@ -178,40 +290,40 @@ class ConstructionAIService {
     generateFallbackCompanies(constructionData) {
         console.log('🔄 Gerando empresas de fallback...');
         
+        const baseCost = Number(constructionData.base_cost) || 10;
+        const constructionDays = Number(constructionData.construction_days) || 30;
+        
         const fallbackCompanies = [
             {
                 id: 1,
                 name: `Construtora ${constructionData.category.charAt(0).toUpperCase()}${constructionData.category.slice(1)} Ltda`,
-                proposed_price: constructionData.base_cost * 0.95,
-                estimated_days: constructionData.construction_days,
+                proposed_price: baseCost * 0.95,
+                estimated_days: constructionDays + 5,
                 experience_level: 'alta',
                 company_history: 'Empresa com experiência no setor',
-                corruption_offer: null,
+                corruption_offer: 0,
                 quality_risk: 'baixo',
                 reliability_score: 0.85
             },
             {
                 id: 2,
                 name: `Engenharia e Obras do Estado`,
-                proposed_price: constructionData.base_cost * 1.15,
-                estimated_days: constructionData.construction_days * 0.9,
+                proposed_price: baseCost * 1.15,
+                estimated_days: Math.round(constructionDays * 0.9),
                 experience_level: 'excelente',
                 company_history: 'Empresa consolidada com várias obras públicas',
-                corruption_offer: {
-                    amount: constructionData.base_cost * 0.05,
-                    description: 'Agilização do processo'
-                },
+                corruption_offer: baseCost * 0.05,
                 quality_risk: 'muito_baixo',
                 reliability_score: 0.92
             },
             {
                 id: 3,
                 name: `Construções Rápidas S.A.`,
-                proposed_price: constructionData.base_cost * 0.82,
-                estimated_days: constructionData.construction_days * 1.2,
+                proposed_price: baseCost * 0.82,
+                estimated_days: Math.round(constructionDays * 1.2),
                 experience_level: 'média',
                 company_history: 'Empresa em crescimento no mercado',
-                corruption_offer: null,
+                corruption_offer: 0,
                 quality_risk: 'médio',
                 reliability_score: 0.70
             }
