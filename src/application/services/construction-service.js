@@ -1,11 +1,13 @@
 const { supabase } = require('../../infrastructure/database/supabase-client');
 const ConstructionAIService = require('./construction-ai-service');
 const StateService = require('./state-service');
+const GroqProvider = require('../../infrastructure/ai/groq-provider'); 
 const CONSTRUCTION_CONSTANTS = require('../../shared/constants/construction-constants');
 
 class ConstructionService {
     constructor() {
-        this.aiService = new ConstructionAIService();
+        const groqProvider = new GroqProvider();
+        this.aiService = new ConstructionAIService(groqProvider);
         this.stateService = new StateService();
     }
 
@@ -262,112 +264,148 @@ class ConstructionService {
      * @returns {Promise<Object>} - Resultado da seleção
      */
     async selectBiddingWinner(userId, constructionId, companyIndex, reason) {
-        try {
-            console.log('🏆 Selecionando empresa vencedora...');
+    try {
+        console.log('🏆 Selecionando empresa vencedora...');
 
-            // CORREÇÃO: Validar parâmetros de entrada
-            if (!userId || !constructionId || companyIndex === undefined) {
-                throw new Error('Parâmetros inválidos para seleção da empresa');
-            }
+        // CORREÇÃO: Validar parâmetros de entrada
+        if (!userId || !constructionId || companyIndex === undefined) {
+            throw new Error('Parâmetros inválidos para seleção da empresa');
+        }
 
-            // Buscar construção e licitação
-            const { data: construction, error: constructionError } = await supabase
-                .from('active_constructions')
-                .select(`
-                    *,
-                    construction_types (name, construction_days),
-                    construction_biddings (generated_companies, status)
-                `)
-                .eq('id', constructionId)
-                .eq('user_id', userId)
-                .single();
+        // CORREÇÃO: Buscar construção separadamente
+        const { data: construction, error: constructionError } = await supabase
+            .from('active_constructions')
+            .select(`
+                *,
+                construction_types (name, construction_days)
+            `)
+            .eq('id', constructionId)
+            .eq('user_id', userId)
+            .single();
 
-            if (constructionError || !construction) {
-                throw new Error('Construção não encontrada');
-            }
+        if (constructionError || !construction) {
+            console.error('❌ Erro ao buscar construção:', constructionError);
+            throw new Error('Construção não encontrada');
+        }
 
-            // CORREÇÃO: Verificar se está em licitação
-            if (construction.status !== CONSTRUCTION_CONSTANTS.STATUS.BIDDING) {
-                throw new Error('Esta construção não está em processo de licitação');
-            }
+        // CORREÇÃO: Verificar se está em licitação
+        if (construction.status !== CONSTRUCTION_CONSTANTS.STATUS.BIDDING) {
+            throw new Error('Esta construção não está em processo de licitação');
+        }
 
-            // CORREÇÃO: Verificar se tem licitação associada
-            const bidding = construction.construction_biddings;
-            if (!bidding || !bidding.generated_companies || !Array.isArray(bidding.generated_companies)) {
-                throw new Error('Licitação não encontrada ou inválida');
-            }
+        // CORREÇÃO: Buscar licitação separadamente
+        const { data: bidding, error: biddingError } = await supabase
+            .from('construction_biddings')
+            .select('*')
+            .eq('construction_id', constructionId)
+            .eq('status', CONSTRUCTION_CONSTANTS.BIDDING_STATUS.OPEN)
+            .single();
 
-            // CORREÇÃO: Validar índice da empresa
-            const companyIdx = Number(companyIndex);
-            if (companyIdx < 0 || companyIdx >= bidding.generated_companies.length) {
-                throw new Error('Índice de empresa inválido');
-            }
+        if (biddingError || !bidding) {
+            console.error('❌ Erro ao buscar licitação:', biddingError);
+            throw new Error('Licitação não encontrada ou inválida');
+        }
 
-            const selectedCompany = bidding.generated_companies[companyIdx];
-            if (!selectedCompany) {
-                throw new Error('Empresa selecionada não encontrada');
-            }
+        // CORREÇÃO: Verificar se tem empresas geradas
+        if (!bidding.generated_companies || !Array.isArray(bidding.generated_companies)) {
+            throw new Error('Licitação não possui empresas válidas');
+        }
 
-            // Verificar corrupção
-            const hasCorruption = selectedCompany.hidden_incentive && selectedCompany.hidden_incentive > 0;
-            const corruptionAmount = hasCorruption ? Number(selectedCompany.hidden_incentive) : 0;
+        // CORREÇÃO: Validar índice da empresa
+        const companyIdx = Number(companyIndex);
+        if (companyIdx < 0 || companyIdx >= bidding.generated_companies.length) {
+            throw new Error(`Índice de empresa inválido. Deve estar entre 0 e ${bidding.generated_companies.length - 1}`);
+        }
 
-            // Calcular nova data de conclusão
-            const newEstimatedCompletion = new Date();
-            const estimatedDays = Number(selectedCompany.estimated_days) || Number(construction.construction_types?.construction_days) || 30;
-            newEstimatedCompletion.setDate(newEstimatedCompletion.getDate() + estimatedDays);
+        const selectedCompany = bidding.generated_companies[companyIdx];
+        if (!selectedCompany) {
+            throw new Error('Empresa selecionada não encontrada');
+        }
 
-            // CORREÇÃO: Agora SIM iniciar a construção após a seleção
-            const { error: updateError } = await supabase
-                .from('active_constructions')
-                .update({
-                    status: CONSTRUCTION_CONSTANTS.STATUS.IN_PROGRESS,
-                    selected_company_index: companyIdx,
-                    selected_company_name: selectedCompany.name,
-                    final_cost: Number(selectedCompany.proposed_cost) || construction.final_cost,
-                    estimated_completion: newEstimatedCompletion.toISOString().split('T')[0],
-                    started_at: new Date().toISOString(),
-                    selection_reason: reason || 'Melhor proposta',
-                    has_corruption: hasCorruption,
-                    corruption_amount: corruptionAmount,
-                    estimated_days: estimatedDays
-                })
-                .eq('id', constructionId);
+        console.log('🏢 Empresa selecionada:', selectedCompany.name || selectedCompany.nome);
 
-            if (updateError) {
-                throw new Error(`Erro ao atualizar construção: ${updateError.message}`);
-            }
+        // CORREÇÃO: Verificar corrupção (suportar ambos os formatos)
+        const corruptionOffer = selectedCompany.corruption_offer || selectedCompany.incentivo_oculto || selectedCompany.hidden_incentive || 0;
+        const hasCorruption = corruptionOffer > 0;
+        const corruptionAmount = hasCorruption ? Number(corruptionOffer) / 1000 : 0; // Converter de milhares para milhões
 
-            // Atualizar status da licitação
-            const { error: biddingUpdateError } = await supabase
-                .from('construction_biddings')
-                .update({
-                    status: CONSTRUCTION_CONSTANTS.BIDDING_STATUS.CLOSED,
-                    selected_company_index: companyIdx
-                })
-                .eq('construction_id', constructionId);
+        // CORREÇÃO: Obter preço e prazo (suportar ambos os formatos)
+        const proposedCost = selectedCompany.proposed_price || selectedCompany.proposta_de_preco || selectedCompany.proposed_cost || construction.final_cost;
+        const estimatedDays = selectedCompany.estimated_days || selectedCompany.prazo_estimado || construction.construction_types?.construction_days || 180;
 
-            if (biddingUpdateError) {
-                console.warn('⚠️ Erro ao atualizar licitação:', biddingUpdateError);
-            }
+        // Calcular nova data de conclusão
+        const currentDate = new Date();
+        const newEstimatedCompletion = new Date(currentDate.getTime() + (estimatedDays * 24 * 60 * 60 * 1000));
 
-            console.log('✅ Empresa selecionada e construção iniciada!');
-
-            return {
-                construction_id: constructionId,
-                selected_company: selectedCompany,
-                new_status: CONSTRUCTION_CONSTANTS.STATUS.IN_PROGRESS,
-                estimated_completion: newEstimatedCompletion,
+        // CORREÇÃO: Atualizar construção com empresa vencedora
+        const { data: updatedConstruction, error: updateError } = await supabase
+            .from('active_constructions')
+            .update({
+                status: CONSTRUCTION_CONSTANTS.STATUS.IN_PROGRESS,
+                winning_company: selectedCompany,
+                final_cost: proposedCost,
+                estimated_completion: newEstimatedCompletion.toISOString(),
                 has_corruption: hasCorruption,
                 corruption_amount: corruptionAmount,
-                message: 'Empresa selecionada e construção iniciada com sucesso!'
-            };
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', constructionId)
+            .select()
+            .single();
 
-        } catch (error) {
-            console.error('❌ Erro ao selecionar empresa vencedora:', error);
-            throw error;
+        if (updateError) {
+            console.error('❌ Erro ao atualizar construção:', updateError);
+            throw new Error('Erro ao atualizar construção com empresa vencedora');
         }
+
+        // CORREÇÃO: Fechar licitação
+        const { error: closeBiddingError } = await supabase
+            .from('construction_biddings')
+            .update({
+                status: CONSTRUCTION_CONSTANTS.BIDDING_STATUS.CLOSED,
+                selected_company_index: companyIdx,
+                selection_reason: reason,
+                closed_at: new Date().toISOString()
+            })
+            .eq('id', bidding.id);
+
+        if (closeBiddingError) {
+            console.error('❌ Erro ao fechar licitação:', closeBiddingError);
+            // Não falhar por isso, mas logar o erro
+        }
+
+        // Log da seleção
+        if (hasCorruption) {
+            console.log('⚠️ CORRUPÇÃO DETECTADA: Empresa ofereceu propina de R$', corruptionAmount, 'milhões');
+        }
+
+        console.log('✅ Empresa selecionada e construção iniciada!');
+
+        return {
+            construction_id: constructionId,
+            selected_company: {
+                name: selectedCompany.name || selectedCompany.nome,
+                proposed_price: proposedCost,
+                estimated_days: estimatedDays,
+                corruption_offer: hasCorruption ? {
+                    amount: corruptionAmount,
+                    description: 'Incentivo para agilização do processo'
+                } : null
+            },
+            new_status: CONSTRUCTION_CONSTANTS.STATUS.IN_PROGRESS,
+            estimated_completion: newEstimatedCompletion.toISOString(),
+            has_corruption: hasCorruption,
+            corruption_amount: corruptionAmount,
+            message: hasCorruption ? 
+                'Empresa selecionada com oferta de propina. A corrupção foi registrada no sistema.' :
+                'Empresa selecionada e construção iniciada com sucesso!'
+        };
+
+    } catch (error) {
+        console.error('❌ Erro ao selecionar empresa vencedora:', error);
+        throw error;
     }
+}
 
     /**
      * Cancelar construção (apenas se em licitação)
@@ -450,50 +488,57 @@ class ConstructionService {
      * @returns {Promise<Array>} - Lista de construções
      */
     async getUserConstructions(userId, filters = {}) {
-        try {
-            let query = supabase
-                .from('active_constructions')
-                .select(`
-                    *,
-                    construction_types (
-                        name, 
-                        category, 
-                        base_cost, 
-                        construction_days,
-                        gdp_impact,
-                        population_impact
-                    ),
-                    construction_biddings (
-                        status,
-                        generated_companies,
-                        selected_company_index
-                    )
-                `)
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
+    try {
+        console.log('📋 Listando construções do usuário...');
 
-            // Aplicar filtros se fornecidos
-            if (filters.status) {
-                query = query.eq('status', filters.status);
-            }
+        // CORREÇÃO: Usar nomes corretos dos campos da tabela construction_types
+        let query = supabase
+            .from('active_constructions')
+            .select(`
+                *,
+                construction_types (
+                    id,
+                    name, 
+                    category, 
+                    base_cost, 
+                    construction_days,
+                    economic_impact,
+                    population_impact,
+                    monthly_maintenance
+                ),
+                construction_biddings (
+                    status,
+                    generated_companies,
+                    selected_company_index,
+                    selection_reason
+                )
+            `)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
 
-            if (filters.category) {
-                query = query.eq('construction_types.category', filters.category);
-            }
-
-            const { data: constructions, error } = await query;
-
-            if (error) {
-                throw new Error(`Erro ao buscar construções: ${error.message}`);
-            }
-
-            return constructions || [];
-
-        } catch (error) {
-            console.error('❌ Erro ao listar construções:', error);
-            throw error;
+        // Aplicar filtros se fornecidos
+        if (filters.status) {
+            query = query.eq('status', filters.status);
         }
+
+        if (filters.category) {
+            query = query.eq('construction_types.category', filters.category);
+        }
+
+        const { data: constructions, error } = await query;
+
+        if (error) {
+            console.error('❌ Erro na query:', error);
+            throw new Error(`Erro ao buscar construções: ${error.message}`);
+        }
+
+        return constructions || [];
+
+    } catch (error) {
+        console.error('❌ Erro ao listar construções:', error);
+        throw error;
     }
+}
 
     /**
      * Obter detalhes de uma construção específica

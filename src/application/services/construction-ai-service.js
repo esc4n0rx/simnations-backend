@@ -1,11 +1,18 @@
-// CORREÇÃO: Caminho correto para as constantes
+// CORREÇÃO: Caminho correto para as constantes e GroqProvider
 const CONSTRUCTION_CONSTANTS = require('../../shared/constants/construction-constants');
+const { z } = require('zod');
+const GroqProvider = require('../../infrastructure/ai/groq-provider');
 
 class ConstructionAIService {
     constructor(aiProvider) {
-        this.groqProvider = aiProvider;
+        if (!aiProvider) {
+            console.warn('⚠️ ConstructionAIService: Provider de IA não fornecido');
+            this.groqProvider = null;
+        } else {
+            this.groqProvider = aiProvider;
+        }
     }
-
+    
     /**
      * Gerar empresas para licitação usando IA
      * @param {Object} constructionData - Dados da construção

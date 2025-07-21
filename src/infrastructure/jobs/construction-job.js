@@ -2,13 +2,15 @@ const cron = require('node-cron');
 const ConstructionService = require('../../application/services/construction-service');
 const ConstructionAIService = require('../../application/services/construction-ai-service');
 const StateService = require('../../application/services/state-service');
+const GroqProvider = require('../ai/groq-provider');
 const { supabase } = require('../database/supabase-client');
 const CONSTRUCTION_CONSTANTS = require('../../shared/constants/construction-constants');
 
 class ConstructionJob {
     constructor() {
         this.constructionService = new ConstructionService();
-        this.aiService = new ConstructionAIService();
+        const groqProvider = new GroqProvider();
+        this.aiService = new ConstructionAIService(groqProvider);
         this.stateService = new StateService();
         this.isRunning = false;
         this.isActive = true;
