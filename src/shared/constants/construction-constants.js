@@ -29,6 +29,35 @@ const QUALITY_LEVELS = {
     EXCELLENT: 'excelente'
 };
 
+// ADIÇÃO: Configuração dos tipos de construção para IA
+const CONSTRUCTION_TYPES = {
+    saude: {
+        specialization: 'construção civil hospitalar',
+        context_tags: 'saúde, equipamentos médicos, infraestrutura hospitalar',
+        typical_companies: ['construtoras especializadas em saúde', 'empresas de equipamentos médicos']
+    },
+    educacao: {
+        specialization: 'construção civil educacional',
+        context_tags: 'educação, salas de aula, laboratórios, biblioteca',
+        typical_companies: ['construtoras de obras públicas', 'empresas especializadas em educação']
+    },
+    infraestrutura: {
+        specialization: 'construção civil e engenharia pesada',
+        context_tags: 'infraestrutura, estradas, pontes, saneamento',
+        typical_companies: ['construtoras de grande porte', 'empresas de engenharia civil']
+    },
+    seguranca: {
+        specialization: 'construção civil de segurança',
+        context_tags: 'segurança pública, sistemas de monitoramento, instalações especiais',
+        typical_companies: ['construtoras especializadas', 'empresas de segurança e tecnologia']
+    },
+    social: {
+        specialization: 'construção civil e paisagismo',
+        context_tags: 'cultura, esporte, lazer, meio ambiente',
+        typical_companies: ['construtoras gerais', 'empresas de paisagismo']
+    }
+};
+
 // Configurações da job
 const JOB_CONFIG = {
     SCHEDULE: process.env.CONSTRUCTION_JOB_SCHEDULE || '0 7 * * *', // Diariamente às 7h
@@ -103,6 +132,9 @@ const CONSTRUCTION_CONSTANTS = {
     
     // Categorias
     CATEGORIES: CONSTRUCTION_CATEGORIES,
+    
+    // ADIÇÃO: Tipos de construção
+    TYPES: CONSTRUCTION_TYPES,
     
     // Qualidade
     QUALITY_LEVELS,
