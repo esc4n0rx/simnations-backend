@@ -55,10 +55,13 @@ const IMPACT_CATEGORIES = {
     }
 };
 
+// *** COOLDOWNS MODIFICADOS - EXPANDINDO PARA 10 EVENTOS POR DIA ***
 const EVENT_COOLDOWNS = {
     SAME_TYPE: 7, // dias antes de repetir tipo de evento
     SAME_SEVERITY: 3, // dias antes de repetir severidade
-    GENERAL: 1 // dias mínimos entre qualquer evento
+    GENERAL: 0, // removido o cooldown geral diário (era 1 dia)
+    MAX_EVENTS_PER_DAY: 10, // máximo de 10 eventos por dia
+    DAILY_RESET_HOUR: 0 // hora em que o contador diário é resetado (00:00)
 };
 
 const LLM_SETTINGS = {

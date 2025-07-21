@@ -1,21 +1,19 @@
-const { supabase } = require('../../infrastructure/database/supabase-client');
-const { 
-    PoliticalEvent, 
-    EventDecisionOption, 
-    PlayerDecision, 
-    AgentReaction 
-} = require('../entities/political-event');
+const supabase = require('../../infrastructure/database/supabase-client');
+const PoliticalEvent = require('../entities/political-event');
+const EventDecisionOption = require('../entities/event-decision-option');
+const PlayerDecision = require('../entities/player-decision');
+const AgentReaction = require('../entities/agent-reaction');
 
 class PoliticalEventRepository {
     /**
-     * Criar novo evento político
+     * Criar um novo evento político
      * @param {Object} eventData - Dados do evento
      * @returns {Promise<PoliticalEvent>} - Evento criado
      */
     async createEvent(eventData) {
         const { data, error } = await supabase
             .from('political_events')
-            .insert([eventData])
+            .insert(eventData)
             .select()
             .single();
 
@@ -28,7 +26,7 @@ class PoliticalEventRepository {
 
     /**
      * Criar opções de decisão para um evento
-     * @param {Array} optionsData - Array de opções
+     * @param {Array} optionsData - Array com opções
      * @returns {Promise<Array<EventDecisionOption>>} - Opções criadas
      */
     async createEventOptions(optionsData) {
@@ -45,7 +43,7 @@ class PoliticalEventRepository {
     }
 
     /**
-     * Buscar evento ativo por usuário
+     * Buscar evento ativo do usuário
      * @param {string} userId - ID do usuário
      * @returns {Promise<PoliticalEvent|null>} - Evento ativo ou null
      */
@@ -101,97 +99,82 @@ class PoliticalEventRepository {
         return data.map(event => new PoliticalEvent(event));
     }
 
+    // *** NOVO MÉTODO - CONTAR EVENTOS GERADOS HOJE ***
     /**
-     * Registrar decisão do jogador
-     * @param {Object} decisionData - Dados da decisão
-     * @returns {Promise<PlayerDecision>} - Decisão registrada
+     * Contar quantos eventos o usuário gerou hoje
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<number>} - Quantidade de eventos gerados hoje
      */
-    async createPlayerDecision(decisionData) {
-        const { data, error } = await supabase
-            .from('player_decisions')
-            .insert([decisionData])
-            .select()
-            .single();
+    async countEventsGeneratedToday(userId) {
+        try {
+            // Obter início do dia atual (00:00:00)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            // Obter final do dia atual (23:59:59.999)
+            const endOfDay = new Date();
+            endOfDay.setHours(23, 59, 59, 999);
 
-        if (error) {
-            throw new Error(`Erro ao registrar decisão: ${error.message}`);
+            const { count, error } = await supabase
+                .from('political_events')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .gte('created_at', today.toISOString())
+                .lte('created_at', endOfDay.toISOString());
+
+            if (error) {
+                console.error('❌ Erro ao contar eventos do dia:', error);
+                throw new Error(`Erro ao contar eventos do dia: ${error.message}`);
+            }
+
+            console.log(`📊 Usuário ${userId} gerou ${count || 0} eventos hoje`);
+            return count || 0;
+
+        } catch (error) {
+            console.error('❌ Erro na contagem de eventos diários:', error);
+            // Em caso de erro, retornar 0 para não bloquear o sistema
+            return 0;
         }
-
-        return new PlayerDecision(data);
     }
 
     /**
-     * Salvar reação de agente (CORRIGIDO)
-     * @param {Object} reactionData - Dados da reação
-     * @returns {Promise<AgentReaction>} - Reação salva
+     * Buscar evento por ID
+     * @param {string} eventId - ID do evento
+     * @returns {Promise<PoliticalEvent|null>} - Evento ou null
      */
-    async saveAgentReaction(reactionData) {
-        // Filtrar dados para incluir apenas campos válidos da tabela
-        const validData = {
-            decision_id: reactionData.decision_id,
-            agent_type: reactionData.agent_type,
-            narrative_response: reactionData.narrative_response,
-            institutional_persona: reactionData.institutional_persona || null,
-            governance_impacts: reactionData.governance_impacts || {},
-            economic_impacts: reactionData.economic_impacts || {},
-            raw_impacts: reactionData.raw_impacts || {},
-            processing_time_ms: reactionData.processing_time_ms || 0
-        };
-
+    async findEventById(eventId) {
         const { data, error } = await supabase
-            .from('agent_reactions')
-            .insert([validData])
-            .select()
-            .single();
-
-        if (error) {
-            throw new Error(`Erro ao salvar reação: ${error.message}`);
-        }
-
-        return new AgentReaction(data);
-    }
-
-    /**
-     * Buscar decisão completa com reações
-     * @param {string} decisionId - ID da decisão
-     * @returns {Promise<PlayerDecision|null>} - Decisão com reações
-     */
-    async findDecisionWithReactions(decisionId) {
-        const { data, error } = await supabase
-            .from('player_decisions')
+            .from('political_events')
             .select(`
                 *,
-                agent_reactions (*)
+                event_decision_options (*)
             `)
-            .eq('id', decisionId)
+            .eq('id', eventId)
             .single();
 
         if (error) {
             if (error.code === 'PGRST116') {
                 return null;
             }
-            throw new Error(`Erro ao buscar decisão: ${error.message}`);
+            throw new Error(`Erro ao buscar evento: ${error.message}`);
         }
 
-        const decision = new PlayerDecision(data);
-        decision.agent_reactions = data.agent_reactions.map(reaction => new AgentReaction(reaction));
+        const event = new PoliticalEvent(data);
+        event.options = data.event_decision_options.map(opt => new EventDecisionOption(opt));
         
-        return decision;
+        return event;
     }
 
     /**
      * Atualizar status do evento
      * @param {string} eventId - ID do evento
      * @param {string} status - Novo status
-     * @returns {Promise<boolean>} - True se atualizado
+     * @returns {Promise<boolean>} - Sucesso da operação
      */
     async updateEventStatus(eventId, status) {
         const { error } = await supabase
             .from('political_events')
-            .update({ 
-                status,
-                completed_at: status === 'completed' ? new Date().toISOString() : null
-            })
+            .update({ status, updated_at: new Date().toISOString() })
             .eq('id', eventId);
 
         if (error) {
@@ -202,36 +185,17 @@ class PoliticalEventRepository {
     }
 
     /**
-     * Salvar histórico de impactos aplicados
-     * @param {Object} impactData - Dados dos impactos
-     * @returns {Promise<Object>} - Registro de impacto salvo
-     */
-    async saveAppliedImpacts(impactData) {
-        const { data, error } = await supabase
-            .from('applied_impacts')
-            .insert([impactData])
-            .select()
-            .single();
-
-        if (error) {
-            throw new Error(`Erro ao salvar impactos: ${error.message}`);
-        }
-
-        return data;
-    }
-
-    /**
      * Buscar histórico de eventos do usuário
      * @param {string} userId - ID do usuário
      * @param {number} limit - Limite de registros
-     * @returns {Promise<Array<Object>>} - Histórico de eventos
+     * @returns {Promise<Array<PoliticalEvent>>} - Histórico completo
      */
     async findEventHistoryByUserId(userId, limit = 10) {
         const { data, error } = await supabase
             .from('political_events')
             .select(`
                 *,
-                player_decisions (
+                player_decisions!inner (
                     *,
                     event_decision_options (*),
                     agent_reactions (*)

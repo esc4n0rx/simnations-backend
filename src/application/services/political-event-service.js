@@ -45,14 +45,16 @@ class PoliticalEventService {
                 throw new Error('Dados do estado não encontrados');
             }
 
-            // Verificar cooldowns de eventos recentes
-            const canGenerate = await this.checkEventGenerationCooldowns(userId);
+            // *** VERIFICAÇÃO MODIFICADA - USAR NOVO SISTEMA DE LIMITE DIÁRIO ***
+            const canGenerate = await this.checkDailyEventLimit(userId);
             if (!canGenerate.allowed) {
-                console.log(`⏰ Em cooldown: ${canGenerate.reason}`);
+                console.log(`⏰ Limite diário atingido: ${canGenerate.reason}`);
                 return {
-                    in_cooldown: true,
+                    daily_limit_reached: true,
                     reason: canGenerate.reason,
-                    next_available: canGenerate.next_available
+                    events_generated_today: canGenerate.events_generated_today,
+                    max_events_per_day: canGenerate.max_events_per_day,
+                    next_reset_time: canGenerate.next_reset_time
                 };
             }
 
@@ -80,7 +82,8 @@ class PoliticalEventService {
                     generation_metadata: {
                         processing_time_ms: scenarioData.processing_time_ms,
                         generated_at: scenarioData.generated_at,
-                        recent_events_count: recentEvents.length
+                        recent_events_count: recentEvents.length,
+                        daily_event_count: canGenerate.events_generated_today + 1
                     }
                 }
             };
@@ -98,286 +101,193 @@ class PoliticalEventService {
 
             const createdOptions = await this.eventRepository.createEventOptions(optionsData);
 
-            console.log(`✅ Evento criado: ${createdEvent.title}`);
+            console.log(`✅ Evento criado com sucesso! ID: ${createdEvent.id}`);
+            console.log(`📊 Eventos gerados hoje: ${canGenerate.events_generated_today + 1}/${EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY}`);
 
             return {
-                event: createdEvent.toObject(),
-                options: createdOptions.map(opt => opt.toObject()),
-                generation_metadata: scenarioData
-            };
-
-        } catch (error) {
-            console.error('❌ Erro na geração de evento:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Processar decisão do jogador
-     * @param {string} userId - ID do usuário
-     * @param {string} eventId - ID do evento
-     * @param {string} optionId - ID da opção escolhida
-     * @param {string} reasoning - Raciocínio do jogador (opcional)
-     * @returns {Promise<Object>} - Resultado completo da decisão
-     */
-    async processPlayerDecision(userId, eventId, optionId, reasoning = null) {
-        try {
-            console.log(`⚖️ Processando decisão do usuário ${userId} para evento ${eventId}`);
-
-            // Verificar se evento existe e está ativo
-            const event = await this.eventRepository.findActiveEventByUserId(userId);
-            if (!event || event.id !== eventId) {
-                throw new Error('Evento não encontrado ou não está ativo');
-            }
-
-            // Verificar se opção existe
-            const chosenOption = event.options.find(opt => opt.id === optionId);
-            if (!chosenOption) {
-                throw new Error('Opção de decisão não encontrada');
-            }
-
-            // Buscar dados atuais do estado
-            const stateData = await this.stateRepository.findCompleteStateDataByUserId(userId);
-            if (!stateData) {
-                throw new Error('Dados do estado não encontrados');
-            }
-
-            // Registrar decisão
-            const decisionData = {
-                event_id: eventId,
-                user_id: userId,
-                option_id: optionId,
-                decision_reasoning: reasoning
-            };
-
-            const playerDecision = await this.eventRepository.createPlayerDecision(decisionData);
-
-            // Gerar reações dos agentes em paralelo
-            console.log('🤖 Gerando reações dos agentes...');
-            
-            const [populationReaction, institutionalReaction] = await Promise.allSettled([
-                this.populationAgent.generatePopulationReaction(event, chosenOption, stateData),
-                this.institutionalAgent.generateInstitutionalReaction(event, chosenOption, stateData)
-            ]);
-
-            // Processar reações geradas
-            const reactions = [];
-            
-            // Reação da população
-            if (populationReaction.status === 'fulfilled') {
-                const savedPopulation = await this.eventRepository.saveAgentReaction({
-                    decision_id: playerDecision.id,
-                    ...populationReaction.value
-                });
-                reactions.push(savedPopulation);
-            } else {
-                console.error('❌ Erro na reação popular:', populationReaction.reason);
-                // Usar fallback para reação popular
-                const fallbackPopulation = this.populationAgent.generateFallbackReaction(event, chosenOption, stateData);
-                const savedFallback = await this.eventRepository.saveAgentReaction({
-                    decision_id: playerDecision.id,
-                    ...fallbackPopulation
-                });
-                reactions.push(savedFallback);
-            }
-
-            // Reação institucional
-            if (institutionalReaction.status === 'fulfilled') {
-                const savedInstitutional = await this.eventRepository.saveAgentReaction({
-                    decision_id: playerDecision.id,
-                    ...institutionalReaction.value
-                });
-                reactions.push(savedInstitutional);
-            } else {
-                console.error('❌ Erro na reação institucional:', institutionalReaction.reason);
-                // Usar fallback para reação institucional
-                const fallbackInstitutional = this.institutionalAgent.generateFallbackReaction(event, chosenOption);
-                const savedFallback = await this.eventRepository.saveAgentReaction({
-                    decision_id: playerDecision.id,
-                    ...fallbackInstitutional
-                });
-                reactions.push(savedFallback);
-            }
-
-            // Aplicar impactos no estado
-            const appliedImpacts = await this.applyImpactsToState(userId, reactions, stateData);
-
-            // Marcar evento como completo
-            await this.eventRepository.updateEventStatus(eventId, DECISION_STATUS.COMPLETED);
-
-            console.log('✅ Decisão processada com sucesso');
-
-            return {
-                decision: playerDecision.toObject(),
-                chosen_option: chosenOption.toObject(),
-                agent_reactions: reactions.map(r => r.toObject()),
-                applied_impacts: appliedImpacts,
-                new_state_data: await this.stateRepository.findCompleteStateDataByUserId(userId)
-            };
-
-        } catch (error) {
-            console.error('❌ Erro no processamento da decisão:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Aplicar impactos das reações no estado do usuário
-     * @param {string} userId - ID do usuário
-     * @param {Array} reactions - Array de reações dos agentes
-     * @param {Object} currentStateData - Dados atuais do estado
-     * @returns {Promise<Object>} - Impactos aplicados
-     */
-    async applyImpactsToState(userId, reactions, currentStateData) {
-        try {
-            console.log('📊 Aplicando impactos no estado...');
-
-            const { economy, governance } = currentStateData;
-
-            // Consolidar impactos de todas as reações
-            const totalGovernanceImpacts = {};
-            const totalEconomicImpacts = {};
-
-            reactions.forEach(reaction => {
-                // Somar impactos de governança
-                Object.entries(reaction.governance_impacts).forEach(([field, value]) => {
-                    totalGovernanceImpacts[field] = (totalGovernanceImpacts[field] || 0) + value;
-                });
-
-                // Somar impactos econômicos
-                Object.entries(reaction.economic_impacts).forEach(([field, value]) => {
-                    totalEconomicImpacts[field] = (totalEconomicImpacts[field] || 0) + value;
-                });
-            });
-
-            // Preparar dados anteriores para log
-            const previousGovernance = governance ? governance.toObject() : {};
-            const previousEconomy = economy.toObject();
-
-            // Aplicar impactos de governança
-            const newGovernanceData = {};
-            if (governance && Object.keys(totalGovernanceImpacts).length > 0) {
-                Object.entries(totalGovernanceImpacts).forEach(([field, change]) => {
-                    if (field === 'approval_rating' || field === 'political_stability' || field === 'international_relations') {
-                        // Campos percentuais (0-100)
-                        const currentValue = governance[field] || 50;
-                        const newValue = Math.max(0, Math.min(100, currentValue + change));
-                        newGovernanceData[field] = Math.round(newValue * 100) / 100;
-                    } else if (field === 'corruption_index') {
-                        // Índice de corrupção (0-100, onde 0 é melhor)
-                        const currentValue = governance[field] || 30;
-                        const newValue = Math.max(0, Math.min(100, currentValue + change));
-                        newGovernanceData[field] = Math.round(newValue * 100) / 100;
-                    } else if (field === 'protest_level_change') {
-                        // Campo especial para mudança de nível de protesto
-                        newGovernanceData.protest_level = change;
-                    }
-                });
-
-                if (Object.keys(newGovernanceData).length > 0) {
-                    await this.stateRepository.updateGovernance(governance.id, newGovernanceData);
+                event: {
+                    ...createdEvent.toObject(),
+                    options: createdOptions.map(opt => opt.toObject())
+                },
+                generation_info: {
+                    events_generated_today: canGenerate.events_generated_today + 1,
+                    max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                    remaining_events_today: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY - (canGenerate.events_generated_today + 1)
                 }
-            }
-
-            // Aplicar impactos econômicos
-            const newEconomyData = {};
-            if (Object.keys(totalEconomicImpacts).length > 0) {
-                Object.entries(totalEconomicImpacts).forEach(([field, change]) => {
-                    const currentValue = economy[field] || 0;
-                    
-                    if (field === 'monthly_revenue' || field === 'monthly_expenses' || field === 'treasury_balance') {
-                        // Valores monetários em milhões
-                        const newValue = Math.max(0, currentValue + change);
-                        newEconomyData[field] = Math.round(newValue * 100) / 100;
-                    } else if (field === 'gdp_growth_rate' || field === 'unemployment_rate' || field === 'inflation_rate') {
-                        // Taxas percentuais
-                        const newValue = currentValue + change;
-                        // Aplicar limites razoáveis
-                        if (field === 'unemployment_rate') {
-                            newEconomyData[field] = Math.max(0, Math.min(50, newValue));
-                        } else if (field === 'inflation_rate') {
-                            newEconomyData[field] = Math.max(-5, Math.min(100, newValue));
-                        } else { // gdp_growth_rate
-                            newEconomyData[field] = Math.max(-20, Math.min(20, newValue));
-                        }
-                        newEconomyData[field] = Math.round(newEconomyData[field] * 100) / 100;
-                    }
-                });
-
-                if (Object.keys(newEconomyData).length > 0) {
-                    await this.stateRepository.updateEconomy(economy.id, newEconomyData);
-                }
-            }
-
-            // Salvar log dos impactos aplicados
-            const impactLogData = {
-                decision_id: reactions[0].decision_id, // Todas as reações têm a mesma decision_id
-                user_id: userId,
-                previous_governance: previousGovernance,
-                previous_economy: previousEconomy,
-                new_governance: { ...previousGovernance, ...newGovernanceData },
-                new_economy: { ...previousEconomy, ...newEconomyData },
-                total_governance_changes: totalGovernanceImpacts,
-                total_economic_changes: totalEconomicImpacts
-            };
-
-            const savedImpact = await this.eventRepository.saveAppliedImpacts(impactLogData);
-
-            console.log('✅ Impactos aplicados com sucesso');
-
-            return {
-                governance_changes: newGovernanceData,
-                economic_changes: newEconomyData,
-                total_governance_impacts: totalGovernanceImpacts,
-                total_economic_impacts: totalEconomicImpacts,
-                impact_log_id: savedImpact.id
             };
 
         } catch (error) {
-            console.error('❌ Erro ao aplicar impactos:', error);
+            console.error('❌ Erro ao gerar evento:', error);
             throw error;
         }
     }
 
+    // *** NOVA LÓGICA DE VERIFICAÇÃO - SUBSTITUINDO checkEventGenerationCooldowns ***
     /**
-     * Verificar cooldowns para geração de eventos
+     * Verificar limite diário de eventos do usuário
      * @param {string} userId - ID do usuário
      * @returns {Promise<Object>} - Resultado da verificação
      */
-    async checkEventGenerationCooldowns(userId) {
+    async checkDailyEventLimit(userId) {
         try {
-            // Verificar cooldown geral (mínimo entre qualquer evento)
-            const recentEvents = await this.eventRepository.findRecentEventsByUserId(
-                userId, 
-                EVENT_COOLDOWNS.GENERAL, 
-                1
-            );
+            console.log(`🔍 Verificando limite diário de eventos para usuário: ${userId}`);
 
-            if (recentEvents.length > 0) {
-                const lastEvent = recentEvents[0];
-                const nextAvailable = new Date(lastEvent.created_at);
-                nextAvailable.setDate(nextAvailable.getDate() + EVENT_COOLDOWNS.GENERAL);
-                
+            // Contar eventos gerados hoje
+            const eventsToday = await this.eventRepository.countEventsGeneratedToday(userId);
+            
+            console.log(`📊 Eventos gerados hoje: ${eventsToday}/${EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY}`);
+
+            // Verificar se atingiu o limite
+            if (eventsToday >= EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY) {
+                // Calcular quando o limite será resetado (próximo dia às 00:00)
+                const nextReset = new Date();
+                nextReset.setDate(nextReset.getDate() + 1);
+                nextReset.setHours(EVENT_COOLDOWNS.DAILY_RESET_HOUR, 0, 0, 0);
+
                 return {
                     allowed: false,
-                    reason: 'Cooldown geral ativo',
-                    next_available: nextAvailable.toISOString()
+                    reason: `Limite diário de ${EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY} eventos atingido`,
+                    events_generated_today: eventsToday,
+                    max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                    next_reset_time: nextReset.toISOString()
                 };
             }
 
             return {
                 allowed: true,
-                reason: 'Nenhum cooldown ativo'
+                reason: `Limite diário OK (${eventsToday}/${EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY})`,
+                events_generated_today: eventsToday,
+                max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                remaining_today: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY - eventsToday
             };
 
         } catch (error) {
-            console.error('❌ Erro na verificação de cooldown:', error);
-            // Em caso de erro, permitir geração
+            console.error('❌ Erro na verificação de limite diário:', error);
+            // Em caso de erro, permitir geração para não travar o sistema
             return {
                 allowed: true,
-                reason: 'Erro na verificação, permitindo geração'
+                reason: 'Erro na verificação, permitindo geração',
+                events_generated_today: 0,
+                max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                error: error.message
             };
         }
+    }
+
+    /**
+     * Tomar decisão em um evento
+     * @param {string} userId - ID do usuário
+     * @param {string} eventId - ID do evento
+     * @param {Object} decisionData - Dados da decisão
+     * @returns {Promise<Object>} - Resultado da decisão
+     */
+    async makeDecisionOnEvent(userId, eventId, decisionData) {
+        try {
+            console.log(`🎯 Processando decisão do usuário ${userId} no evento ${eventId}`);
+
+            // Buscar evento e validar
+            const event = await this.eventRepository.findEventById(eventId);
+            if (!event || event.user_id !== userId) {
+                throw new Error('Evento não encontrado ou não pertence ao usuário');
+            }
+
+            if (event.status !== DECISION_STATUS.PENDING) {
+                throw new Error(`Evento não está ativo (status: ${event.status})`);
+            }
+
+            // Buscar dados do estado
+            const stateData = await this.stateRepository.findCompleteStateDataByUserId(userId);
+            
+            // Encontrar opção escolhida
+            const chosenOption = event.options.find(opt => opt.option_index === decisionData.chosen_option_index);
+            if (!chosenOption) {
+                throw new Error('Opção de decisão inválida');
+            }
+
+            // Gerar reações dos agentes
+            const [populationReaction, institutionalReaction] = await Promise.all([
+                this.populationAgent.generateReaction(event.toObject(), chosenOption.toObject(), stateData),
+                this.institutionalAgent.generateReaction(event.toObject(), chosenOption.toObject(), stateData)
+            ]);
+
+            // Criar decisão do jogador
+            const playerDecisionData = {
+                event_id: eventId,
+                user_id: userId,
+                chosen_option_index: decisionData.chosen_option_index,
+                decision_rationale: decisionData.rationale || null,
+                processing_time_ms: Date.now()
+            };
+
+            const playerDecision = await this.eventRepository.createPlayerDecision(playerDecisionData);
+
+            // Salvar reações dos agentes
+            const agentReactionsData = [
+                {
+                    decision_id: playerDecision.id,
+                    agent_type: 'population',
+                    reaction_content: populationReaction.reaction,
+                    impact_data: populationReaction.impacts
+                },
+                {
+                    decision_id: playerDecision.id,
+                    agent_type: 'institutional',
+                    reaction_content: institutionalReaction.analysis,
+                    impact_data: institutionalReaction.impacts
+                }
+            ];
+
+            const agentReactions = await this.eventRepository.createAgentReactions(agentReactionsData);
+
+            // Aplicar impactos no estado
+            const combinedImpacts = this.combineAgentImpacts(populationReaction.impacts, institutionalReaction.impacts);
+            await this.stateRepository.applyImpactsToState(userId, combinedImpacts);
+
+            // Atualizar status do evento
+            await this.eventRepository.updateEventStatus(eventId, DECISION_STATUS.COMPLETED);
+
+            console.log(`✅ Decisão processada com sucesso para evento ${eventId}`);
+
+            return {
+                decision: playerDecision.toObject(),
+                reactions: {
+                    population: populationReaction,
+                    institutional: institutionalReaction
+                },
+                impacts_applied: combinedImpacts,
+                event_status: DECISION_STATUS.COMPLETED
+            };
+
+        } catch (error) {
+            console.error('❌ Erro ao processar decisão:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Combinar impactos dos agentes
+     * @param {Object} populationImpacts - Impactos da população
+     * @param {Object} institutionalImpacts - Impactos institucionais
+     * @returns {Object} - Impactos combinados
+     */
+    combineAgentImpacts(populationImpacts, institutionalImpacts) {
+        const combined = { governance: {}, economy: {} };
+
+        // Combinar impactos de governança
+        ['approval_rating', 'political_stability', 'corruption_index', 'protest_level', 'international_relations'].forEach(key => {
+            const popImpact = populationImpacts[key] || 0;
+            const instImpact = institutionalImpacts[key] || 0;
+            combined.governance[key] = (popImpact + instImpact) / 2; // Média ponderada
+        });
+
+        // Combinar impactos econômicos
+        ['monthly_revenue', 'monthly_expenses', 'gdp_growth_rate', 'treasury_balance', 'unemployment_rate', 'inflation_rate'].forEach(key => {
+            const popImpact = populationImpacts[key] || 0;
+            const instImpact = institutionalImpacts[key] || 0;
+            combined.economy[key] = (popImpact + instImpact) / 2; // Média ponderada
+        });
+
+        return combined;
     }
 
     /**
