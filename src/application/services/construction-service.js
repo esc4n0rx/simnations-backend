@@ -709,13 +709,13 @@ class ConstructionService {
             // Aplicar impactos no PIB e população
             const constructionType = construction.construction_types;
             if (constructionType) {
-                const gdpImpact = Number(constructionType.gdp_impact) || 0;
+                const economicImpact = Number(constructionType.economic_impact) || 0;
                 const populationImpact = Number(constructionType.population_impact) || 0;
 
                 // Ajustar impactos baseados na qualidade
                 const qualityMultiplier = this.getQualityMultiplier(finalQuality);
                 
-                if (gdpImpact > 0 || populationImpact > 0) {
+                if (economicImpact > 0 || populationImpact > 0) {
                     const adjustedGdpImpact = gdpImpact * qualityMultiplier;
                     const adjustedPopulationImpact = populationImpact * qualityMultiplier;
 
