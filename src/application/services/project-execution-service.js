@@ -54,13 +54,50 @@ class ProjectExecutionService {
     }
 
     /**
-     * Obter execuções pendentes
-     * @param {number} limit - Limite de execuções a buscar
-     * @returns {Promise<Array>} - Lista de execuções pendentes
-     */
-    async getPendingExecutions(limit = 50) {
-        try {
-            const { data: executions, error } = await this.executionRepository.supabase
+ * Obter execuções pendentes
+ * @param {number} limit - Limite de execuções a buscar
+ * @returns {Promise<Array>} - Lista de execuções pendentes
+ */
+async getPendingExecutions(limit = 50) {
+    try {
+        // CORREÇÃO: Usar this.executionRepository.supabase corretamente
+        const { data: executions, error } = await this.executionRepository.supabase
+            .from('project_executions')
+            .select(`
+                *,
+                government_projects!inner(
+                    id,
+                    user_id,
+                    state_id,
+                    status
+                )
+            `)
+            .eq('status', 'pending')
+            .lte('scheduled_for', new Date().toISOString()) // Só execuções que já deveriam ter acontecido
+            .order('scheduled_for', { ascending: true })
+            .limit(limit);
+
+        if (error) {
+            throw new Error(`Erro ao buscar execuções pendentes: ${error.message}`);
+        }
+
+        return executions || [];
+    } catch (error) {
+        console.error('❌ Erro ao buscar execuções pendentes:', error);
+        
+        // CORREÇÃO: Verificar se o erro é relacionado ao supabase client
+        if (error.message.includes("Cannot read properties of undefined (reading 'from')")) {
+            console.error('❌ Erro crítico: Supabase client não inicializado corretamente');
+            
+            // Tentar reimportar o supabase client
+            const { supabase } = require('../../infrastructure/database/supabase-client');
+            
+            if (!supabase) {
+                throw new Error('Supabase client não está disponível');
+            }
+            
+            // Tentar novamente com o client reimportado
+            const { data: executions, error: retryError } = await supabase
                 .from('project_executions')
                 .select(`
                     *,
@@ -72,20 +109,20 @@ class ProjectExecutionService {
                     )
                 `)
                 .eq('status', 'pending')
-                .lte('scheduled_for', new Date().toISOString()) // Só execuções que já deveriam ter acontecido
+                .lte('scheduled_for', new Date().toISOString())
                 .order('scheduled_for', { ascending: true })
                 .limit(limit);
-
-            if (error) {
-                throw new Error(`Erro ao buscar execuções pendentes: ${error.message}`);
+            
+            if (retryError) {
+                throw new Error(`Erro na segunda tentativa: ${retryError.message}`);
             }
-
+            
             return executions || [];
-        } catch (error) {
-            console.error('❌ Erro ao buscar execuções pendentes:', error);
-            throw error;
         }
+        
+        throw error;
     }
+}
 
     /**
      * Processar execução individual

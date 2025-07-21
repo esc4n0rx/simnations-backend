@@ -216,55 +216,67 @@ class ConstructionAIService {
     }
 
     /**
-     * Validar preço proposto
-     * @param {any} price - Preço a validar
-     * @param {number} baseCost - Custo base
-     * @returns {number} - Preço válido
-     */
-    validatePrice(price, baseCost) {
-        let numericPrice = parseFloat(price);
+ * Validar preço proposto
+ * @param {any} price - Preço a validar
+ * @param {number} baseCost - Custo base
+ * @returns {number} - Preço válido
+ */
+validatePrice(price, baseCost) {
+    let numericPrice = parseFloat(price);
+    
+    if (isNaN(numericPrice)) {
+        // CORREÇÃO: Limpar melhor texto explicativo da IA
+        let cleanPrice = price.toString();
         
+        // Remover textos explicativos entre parênteses
+        cleanPrice = cleanPrice.replace(/\s*\([^)]*\)/g, '');
+        
+        // Remover caracteres não numéricos exceto ponto e vírgula
+        cleanPrice = cleanPrice.replace(/[^\d.,]/g, '');
+        
+        // Converter vírgulas em pontos para números decimais
+        cleanPrice = cleanPrice.replace(',', '.');
+        
+        numericPrice = parseFloat(cleanPrice);
+        
+        // Se ainda não conseguiu parsear, usar uma variação do custo base
         if (isNaN(numericPrice)) {
-            // Se veio como string com "R$" ou formatação
-            const cleanPrice = price.toString().replace(/[R$\s.,]/g, '');
-            numericPrice = parseFloat(cleanPrice);
+            console.warn(`⚠️ Não foi possível parsear preço: "${price}", usando custo base com variação`);
+            const variation = (Math.random() - 0.5) * 0.4; // -20% a +20%
+            numericPrice = baseCost * (1 + variation);
         }
+    }
+    
+        // Garantir que o preço não seja menor que 10% do custo base nem maior que 200%
+        const minPrice = baseCost * 0.1;
+        const maxPrice = baseCost * 2.0;
         
-        if (isNaN(numericPrice) || numericPrice <= 0) {
-            // Fallback: gerar preço aleatório baseado no custo base
-            const variation = this.getRandomBetween(80, 130) / 100; // 0.8 a 1.3
-            numericPrice = baseCost * variation;
-        }
-        
-        return Number(numericPrice.toFixed(2));
+        return Math.max(minPrice, Math.min(maxPrice, numericPrice));
     }
 
-    /**
-     * Parsear oferta de corrupção
-     * @param {any} corruptionData - Dados de corrupção
-     * @returns {number} - Valor da propina ou 0
-     */
-    parseCorruptionOffer(corruptionData) {
-        if (!corruptionData) return 0;
-        
-        // Se é um número direto
-        if (typeof corruptionData === 'number') {
-            return Math.max(0, corruptionData);
+        /**
+         * Parsear oferta de corrupção
+         * @param {any} corruptionOffer - Oferta de corrupção
+         * @returns {number} - Valor numérico da propina
+         */
+        parseCorruptionOffer(corruptionOffer) {
+            if (!corruptionOffer || corruptionOffer === 0 || corruptionOffer === '0') {
+                return 0;
+            }
+            
+            // Se for string, tentar extrair número
+            if (typeof corruptionOffer === 'string') {
+                // Remover textos explicativos
+                let cleanOffer = corruptionOffer.replace(/\s*\([^)]*\)/g, '');
+                cleanOffer = cleanOffer.replace(/[^\d.,]/g, '');
+                cleanOffer = cleanOffer.replace(',', '.');
+                
+                const numericOffer = parseFloat(cleanOffer);
+                return isNaN(numericOffer) ? 0 : numericOffer;
+            }
+            
+            return parseFloat(corruptionOffer) || 0;
         }
-        
-        // Se é um objeto com amount
-        if (typeof corruptionData === 'object' && corruptionData.amount) {
-            return Math.max(0, parseFloat(corruptionData.amount) || 0);
-        }
-        
-        // Se é string com valor
-        if (typeof corruptionData === 'string') {
-            const numericValue = parseFloat(corruptionData.replace(/[R$\s.,]/g, ''));
-            return Math.max(0, numericValue || 0);
-        }
-        
-        return 0;
-    }
 
     /**
      * Validar score de confiabilidade
