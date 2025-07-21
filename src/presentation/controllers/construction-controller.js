@@ -35,8 +35,18 @@ class ConstructionController {
         try {
             console.log('🔍 [CONTROLLER] Verificando possibilidade de iniciar construção');
             
+            // CORREÇÃO: Validar se user existe
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
             const { constructionTypeId } = req.params;
+
+            // CORREÇÃO: Validar parâmetros
+            if (!constructionTypeId) {
+                return ResponseHelper.badRequest(res, 'ID do tipo de construção é obrigatório');
+            }
             
             const canStart = await this.constructionService.canStartConstruction(userId, constructionTypeId);
             
@@ -55,8 +65,18 @@ class ConstructionController {
         try {
             console.log('🚀 [CONTROLLER] Iniciando nova construção');
             
+            // CORREÇÃO: Validar autenticação
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
             const { construction_type_id } = req.body;
+
+            // CORREÇÃO: Validar dados do body
+            if (!construction_type_id) {
+                return ResponseHelper.badRequest(res, 'ID do tipo de construção é obrigatório');
+            }
             
             const result = await this.constructionService.startConstruction(userId, construction_type_id);
             
@@ -65,8 +85,12 @@ class ConstructionController {
         } catch (error) {
             console.error('❌ [CONTROLLER] Erro ao iniciar construção:', error);
             
-            if (error.message.includes('insuficiente') || error.message.includes('Necessário')) {
+            if (error.message.includes('insuficiente') || error.message.includes('Necessário') || error.message.includes('Limite')) {
                 return ResponseHelper.badRequest(res, error.message);
+            }
+
+            if (error.message.includes('não encontrado')) {
+                return ResponseHelper.notFound(res, error.message);
             }
             
             return ResponseHelper.error(res, 'Erro ao iniciar construção', 500);
@@ -80,9 +104,23 @@ class ConstructionController {
         try {
             console.log('🏆 [CONTROLLER] Selecionando vencedora da licitação');
             
+            // CORREÇÃO: Validar autenticação
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
             const { constructionId } = req.params;
             const { company_index, reason } = req.body;
+
+            // CORREÇÃO: Validar parâmetros obrigatórios
+            if (!constructionId) {
+                return ResponseHelper.badRequest(res, 'ID da construção é obrigatório');
+            }
+
+            if (company_index === undefined || company_index === null) {
+                return ResponseHelper.badRequest(res, 'Índice da empresa é obrigatório');
+            }
             
             const result = await this.constructionService.selectBiddingWinner(
                 userId, 
@@ -99,6 +137,10 @@ class ConstructionController {
             if (error.message.includes('não encontrada') || error.message.includes('não existe')) {
                 return ResponseHelper.notFound(res, error.message);
             }
+
+            if (error.message.includes('inválido') || error.message.includes('licitação')) {
+                return ResponseHelper.badRequest(res, error.message);
+            }
             
             return ResponseHelper.error(res, 'Erro ao selecionar empresa vencedora', 500);
         }
@@ -111,6 +153,11 @@ class ConstructionController {
         try {
             console.log('📋 [CONTROLLER] Listando construções do usuário');
             
+            // CORREÇÃO: Validar autenticação
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
             const filters = req.query;
             
@@ -119,12 +166,13 @@ class ConstructionController {
             return ResponseHelper.success(res, {
                 constructions,
                 total: constructions.length,
-                summary: this.generateConstructionsSummary(constructions)
+                summary: this.generateConstructionsSummary(constructions),
+                message: 'Construções do usuário listadas com sucesso'
             });
 
         } catch (error) {
             console.error('❌ [CONTROLLER] Erro ao listar construções do usuário:', error);
-            return ResponseHelper.error(res, 'Erro ao listar suas construções', 500);
+            return ResponseHelper.error(res, 'Erro ao listar construções do usuário', 500);
         }
     }
 
@@ -135,10 +183,18 @@ class ConstructionController {
         try {
             console.log('🔍 [CONTROLLER] Buscando detalhes da construção');
             
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
             const { constructionId } = req.params;
-            
-            const construction = await this.constructionService.getConstructionDetails(userId, constructionId);
+
+            if (!constructionId) {
+                return ResponseHelper.badRequest(res, 'ID da construção é obrigatório');
+            }
+
+            const construction = await this.constructionService.getConstructionById(userId, constructionId);
             
             return ResponseHelper.success(res, construction);
 
@@ -154,71 +210,25 @@ class ConstructionController {
     }
 
     /**
-     * Cancelar construção
-     */
-    async cancelConstruction(req, res) {
-        try {
-            console.log('🛑 [CONTROLLER] Cancelando construção');
-            
-            const userId = req.user.id;
-            const { constructionId } = req.params;
-            const { reason } = req.body;
-            
-            const result = await this.constructionService.cancelConstruction(userId, constructionId, reason);
-            
-            return ResponseHelper.success(res, result);
-
-        } catch (error) {
-            console.error('❌ [CONTROLLER] Erro ao cancelar construção:', error);
-            
-            if (error.message.includes('não encontrada') || error.message.includes('não podem ser')) {
-                return ResponseHelper.badRequest(res, error.message);
-            }
-            
-            return ResponseHelper.error(res, 'Erro ao cancelar construção', 500);
-        }
-    }
-
-    /**
-     * Obter histórico de construções
+     * Obter histórico de construções completadas
      */
     async getConstructionHistory(req, res) {
         try {
             console.log('📚 [CONTROLLER] Buscando histórico de construções');
             
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
             const userId = req.user.id;
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const offset = (page - 1) * limit;
+            const filters = { ...req.query, status: 'completed' };
             
-            const { data: history, error } = await supabase
-                .from('construction_history')
-                .select('*')
-                .eq('user_id', userId)
-                .order('completed_at', { ascending: false })
-                .range(offset, offset + limit - 1);
-
-            if (error) {
-                throw error;
-            }
-
-            const { data: totalCount, error: countError } = await supabase
-                .from('construction_history')
-                .select('id', { count: 'exact' })
-                .eq('user_id', userId);
-
-            if (countError) {
-                throw countError;
-            }
-
+            const history = await this.constructionService.getUserConstructions(userId, filters);
+            
             return ResponseHelper.success(res, {
                 history,
-                pagination: {
-                    page,
-                    limit,
-                    total: totalCount.length,
-                    total_pages: Math.ceil(totalCount.length / limit)
-                }
+                total: history.length,
+                message: 'Histórico de construções obtido com sucesso'
             });
 
         } catch (error) {
@@ -228,21 +238,71 @@ class ConstructionController {
     }
 
     /**
-     * Forçar atualização de construções (Admin)
+     * Cancelar construção
+     */
+    async cancelConstruction(req, res) {
+        try {
+            console.log('🛑 [CONTROLLER] Cancelando construção');
+            
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
+            const userId = req.user.id;
+            const { constructionId } = req.params;
+            const { reason } = req.body;
+
+            if (!constructionId) {
+                return ResponseHelper.badRequest(res, 'ID da construção é obrigatório');
+            }
+            
+            const result = await this.constructionService.cancelConstruction(userId, constructionId, reason);
+            
+            return ResponseHelper.success(res, result);
+
+        } catch (error) {
+            console.error('❌ [CONTROLLER] Erro ao cancelar construção:', error);
+            
+            if (error.message.includes('não encontrada')) {
+                return ResponseHelper.notFound(res, error.message);
+            }
+
+            if (error.message.includes('Apenas') || error.message.includes('licitação')) {
+                return ResponseHelper.badRequest(res, error.message);
+            }
+            
+            return ResponseHelper.error(res, 'Erro ao cancelar construção', 500);
+        }
+    }
+
+    /**
+     * NOVO: Forçar atualização de construções (Admin)
      */
     async forceConstructionUpdate(req, res) {
         try {
-            console.log('🔧 [CONTROLLER] Forçando atualização de construções');
+            console.log('🔧 [CONTROLLER] Forçando atualização de construções (Admin)');
             
-            // Esta função seria chamada pela job
-            // Por enquanto, retornamos sucesso
+            if (!req.user || !req.user.id) {
+                return ResponseHelper.unauthorized(res, 'Usuário não autenticado');
+            }
+
+            // Verificar se é admin (pode adicionar essa validação se necessário)
+            // if (!req.user.is_admin) {
+            //     return ResponseHelper.forbidden(res, 'Acesso negado - apenas administradores');
+            // }
+
+            // Executar verificação de integridade dos dados
+            const integrityCheck = await this.constructionService.checkDataIntegrity(req.user.id);
+            
             return ResponseHelper.success(res, {
-                message: 'Atualização de construções executada com sucesso'
+                message: 'Verificação de integridade executada com sucesso',
+                integrity_report: integrityCheck,
+                timestamp: new Date().toISOString()
             });
 
         } catch (error) {
             console.error('❌ [CONTROLLER] Erro ao forçar atualização:', error);
-            return ResponseHelper.error(res, 'Erro ao executar atualização', 500);
+            return ResponseHelper.error(res, 'Erro ao executar atualização de construções', 500);
         }
     }
 
@@ -252,6 +312,18 @@ class ConstructionController {
      * @returns {Object} - Resumo estatístico
      */
     generateConstructionsSummary(constructions) {
+        if (!Array.isArray(constructions) || constructions.length === 0) {
+            return {
+                total: 0,
+                by_status: {},
+                by_category: {},
+                total_invested: 0,
+                active_constructions: 0,
+                completed_constructions: 0,
+                average_progress: 0
+            };
+        }
+
         const summary = {
             total: constructions.length,
             by_status: {},
@@ -263,7 +335,7 @@ class ConstructionController {
         };
 
         constructions.forEach(construction => {
-            const status = construction.status;
+            const status = construction.status || 'unknown';
             const category = construction.construction_types?.category || 'unknown';
             
             // Contar por status
@@ -293,7 +365,7 @@ class ConstructionController {
             const totalProgress = activeConstructions.reduce((sum, c) => 
                 sum + (c.progress_percentage || 0), 0
             );
-            summary.average_progress = totalProgress / activeConstructions.length;
+            summary.average_progress = Math.round((totalProgress / activeConstructions.length) * 100) / 100;
         }
 
         return summary;
