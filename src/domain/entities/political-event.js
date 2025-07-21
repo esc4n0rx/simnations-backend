@@ -7,18 +7,14 @@ class PoliticalEvent {
         this.description = data.description;
         this.event_type = data.event_type;
         this.severity = data.severity;
-        this.status = data.status;
+        this.status = data.status || 'pending';
         this.expires_at = data.expires_at;
         this.created_at = data.created_at;
         this.completed_at = data.completed_at;
-        this.context_snapshot = data.context_snapshot;
+        this.context_snapshot = data.context_snapshot || {};
         this.options = data.options || [];
     }
 
-    /**
-     * Converte para objeto simples
-     * @returns {Object} - Objeto do evento político
-     */
     toObject() {
         return {
             id: this.id,
@@ -33,7 +29,8 @@ class PoliticalEvent {
             created_at: this.created_at,
             completed_at: this.completed_at,
             context_snapshot: this.context_snapshot,
-            options: this.options.map(option => option.toObject ? option.toObject() : option)
+            options: this.options.map(option => 
+                option.toObject ? option.toObject() : option)
         };
     }
 
@@ -86,9 +83,12 @@ class PlayerDecision {
         this.event_id = data.event_id;
         this.user_id = data.user_id;
         this.option_id = data.option_id;
-        this.decision_reasoning = data.decision_reasoning;
+        this.chosen_option_index = data.chosen_option_index;
+        this.decision_rationale = data.decision_rationale;
         this.decided_at = data.decided_at;
+        this.processing_time_ms = data.processing_time_ms;
         this.agent_reactions = data.agent_reactions || [];
+        this.chosen_option = data.chosen_option || null;
     }
 
     toObject() {
@@ -97,11 +97,14 @@ class PlayerDecision {
             event_id: this.event_id,
             user_id: this.user_id,
             option_id: this.option_id,
-            decision_reasoning: this.decision_reasoning,
+            chosen_option_index: this.chosen_option_index,
+            decision_rationale: this.decision_rationale,
             decided_at: this.decided_at,
+            processing_time_ms: this.processing_time_ms,
             agent_reactions: this.agent_reactions.map(reaction => 
-                reaction.toObject ? reaction.toObject() : reaction
-            )
+                reaction.toObject ? reaction.toObject() : reaction),
+            chosen_option: this.chosen_option ? 
+                (this.chosen_option.toObject ? this.chosen_option.toObject() : this.chosen_option) : null
         };
     }
 }
@@ -111,12 +114,8 @@ class AgentReaction {
         this.id = data.id;
         this.decision_id = data.decision_id;
         this.agent_type = data.agent_type;
-        this.narrative_response = data.narrative_response;
-        this.institutional_persona = data.institutional_persona;
-        this.governance_impacts = data.governance_impacts || {};
-        this.economic_impacts = data.economic_impacts || {};
-        this.raw_impacts = data.raw_impacts || {}; // ADICIONADO
-        this.processing_time_ms = data.processing_time_ms;
+        this.reaction_content = data.reaction_content;
+        this.impact_data = data.impact_data || {};
         this.created_at = data.created_at;
     }
 
@@ -125,24 +124,9 @@ class AgentReaction {
             id: this.id,
             decision_id: this.decision_id,
             agent_type: this.agent_type,
-            narrative_response: this.narrative_response,
-            institutional_persona: this.institutional_persona,
-            governance_impacts: this.governance_impacts,
-            economic_impacts: this.economic_impacts,
-            raw_impacts: this.raw_impacts, // ADICIONADO
-            processing_time_ms: this.processing_time_ms,
+            reaction_content: this.reaction_content,
+            impact_data: this.impact_data,
             created_at: this.created_at
-        };
-    }
-
-    /**
-     * Calcula impacto total somando governança e economia
-     * @returns {Object} - Objeto com todos os impactos
-     */
-    getTotalImpacts() {
-        return {
-            ...this.governance_impacts,
-            ...this.economic_impacts
         };
     }
 }

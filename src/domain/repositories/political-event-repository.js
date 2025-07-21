@@ -1,8 +1,5 @@
 const supabase = require('../../infrastructure/database/supabase-client');
-const PoliticalEvent = require('../entities/political-event');
-const EventDecisionOption = require('../entities/event-decision-option');
-const PlayerDecision = require('../entities/player-decision');
-const AgentReaction = require('../entities/agent-reaction');
+const { PoliticalEvent, EventDecisionOption, PlayerDecision, AgentReaction } = require('../entities/political-event');
 
 class PoliticalEventRepository {
     /**
@@ -74,58 +71,111 @@ class PoliticalEventRepository {
     }
 
     /**
-     * Buscar eventos recentes do usuário
-     * @param {string} userId - ID do usuário  
-     * @param {number} days - Dias atrás para buscar
-     * @param {number} limit - Limite de eventos
-     * @returns {Promise<Array<PoliticalEvent>>} - Eventos recentes
+     * Criar decisão do jogador
+     * @param {Object} decisionData - Dados da decisão
+     * @returns {Promise<PlayerDecision>} - Decisão criada
      */
-    async findRecentEventsByUserId(userId, days = 7, limit = 5) {
-        const dateThreshold = new Date();
-        dateThreshold.setDate(dateThreshold.getDate() - days);
-
+    async createPlayerDecision(decisionData) {
         const { data, error } = await supabase
-            .from('political_events')
-            .select('*')
-            .eq('user_id', userId)
-            .gte('created_at', dateThreshold.toISOString())
-            .order('created_at', { ascending: false })
-            .limit(limit);
+            .from('player_decisions')
+            .insert(decisionData)
+            .select()
+            .single();
 
         if (error) {
-            throw new Error(`Erro ao buscar eventos recentes: ${error.message}`);
+            throw new Error(`Erro ao criar decisão: ${error.message}`);
         }
 
-        return data.map(event => new PoliticalEvent(event));
+        return new PlayerDecision(data);
     }
 
-    // *** NOVO MÉTODO - CONTAR EVENTOS GERADOS HOJE ***
     /**
-     * Contar quantos eventos o usuário gerou hoje
-     * @param {string} userId - ID do usuário
-     * @returns {Promise<number>} - Quantidade de eventos gerados hoje
+     * Criar reações dos agentes
+     * @param {Array} reactionsData - Array com reações
+     * @returns {Promise<Array<AgentReaction>>} - Reações criadas
      */
-    async countEventsGeneratedToday(userId) {
+    async createAgentReactions(reactionsData) {
+        const { data, error } = await supabase
+            .from('agent_reactions')
+            .insert(reactionsData)
+            .select();
+
+        if (error) {
+            throw new Error(`Erro ao criar reações: ${error.message}`);
+        }
+
+        return data.map(reaction => new AgentReaction(reaction));
+    }
+
+    /**
+     * Verificar se usuário pode gerar novo evento
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<Object>} - Status de cooldown
+     */
+    async checkEventCooldown(userId) {
         try {
-            // Obter início do dia atual (00:00:00)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // Obter final do dia atual (23:59:59.999)
-            const endOfDay = new Date();
-            endOfDay.setHours(23, 59, 59, 999);
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            // Contar eventos gerados hoje
+            const { count: eventsToday } = await supabase
+                .from('political_events')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', userId)
+                .gte('created_at', todayStart.toISOString());
+
+            // Buscar último evento
+            const { data: lastEvent } = await supabase
+                .from('political_events')
+                .select('created_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            const canGenerate = eventsToday < EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY;
+            let nextEventAvailable = null;
+
+            if (!canGenerate && lastEvent) {
+                const lastEventTime = new Date(lastEvent.created_at);
+                nextEventAvailable = new Date(lastEventTime.getTime() + (EVENT_COOLDOWNS.COOLDOWN_HOURS * 60 * 60 * 1000));
+            }
+
+            return {
+                can_generate: canGenerate,
+                events_generated_today: eventsToday || 0,
+                max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                next_event_available: nextEventAvailable
+            };
+
+        } catch (error) {
+            console.error('❌ Erro na verificação de cooldown:', error);
+            return {
+                can_generate: false,
+                events_generated_today: 0,
+                max_events_per_day: EVENT_COOLDOWNS.MAX_EVENTS_PER_DAY,
+                next_event_available: null
+            };
+        }
+    }
+
+    /**
+     * Contar eventos do usuário hoje
+     * @param {string} userId - ID do usuário
+     * @returns {Promise<number>} - Número de eventos hoje
+     */
+    async countUserEventsToday(userId) {
+        try {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
 
             const { count, error } = await supabase
                 .from('political_events')
-                .select('id', { count: 'exact', head: true })
+                .select('*', { count: 'exact', head: true })
                 .eq('user_id', userId)
-                .gte('created_at', today.toISOString())
-                .lte('created_at', endOfDay.toISOString());
+                .gte('created_at', todayStart.toISOString());
 
-            if (error) {
-                console.error('❌ Erro ao contar eventos do dia:', error);
-                throw new Error(`Erro ao contar eventos do dia: ${error.message}`);
-            }
+            if (error) throw error;
 
             console.log(`📊 Usuário ${userId} gerou ${count || 0} eventos hoje`);
             return count || 0;
@@ -202,7 +252,7 @@ class PoliticalEventRepository {
                 )
             `)
             .eq('user_id', userId)
-            .in('status', ['completed', 'expired'])
+            .eq('status', 'completed')
             .order('created_at', { ascending: false })
             .limit(limit);
 
@@ -210,59 +260,77 @@ class PoliticalEventRepository {
             throw new Error(`Erro ao buscar histórico: ${error.message}`);
         }
 
-        return data.map(event => {
-            const politicalEvent = new PoliticalEvent(event);
-            politicalEvent.decisions = event.player_decisions.map(decision => {
+        return data.map(eventData => {
+            const event = new PoliticalEvent(eventData);
+            
+            // Mapear decisões do jogador
+            event.player_decisions = eventData.player_decisions.map(decision => {
                 const playerDecision = new PlayerDecision(decision);
-                playerDecision.option = new EventDecisionOption(decision.event_decision_options);
+                
+                // Mapear opção escolhida
+                if (decision.event_decision_options) {
+                    playerDecision.chosen_option = new EventDecisionOption(decision.event_decision_options);
+                }
+                
+                // Mapear reações dos agentes
                 playerDecision.agent_reactions = decision.agent_reactions.map(reaction => 
                     new AgentReaction(reaction)
                 );
+                
                 return playerDecision;
             });
-            return politicalEvent;
+            
+            return event;
         });
     }
 
     /**
-     * Verificar cooldown de tipos de evento
+     * Buscar eventos recentes do usuário (últimos 7 dias)
      * @param {string} userId - ID do usuário
-     * @param {string} eventType - Tipo de evento
-     * @param {number} hours - Horas de cooldown
-     * @returns {Promise<boolean>} - True se pode criar evento deste tipo
+     * @returns {Promise<Array<PoliticalEvent>>} - Eventos recentes
      */
-    async checkEventTypeCooldown(userId, eventType, hours = 168) { // 7 dias padrão
-        const dateThreshold = new Date();
-        dateThreshold.setHours(dateThreshold.getHours() - hours);
+    async findRecentEventsByUserId(userId) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
         const { data, error } = await supabase
             .from('political_events')
-            .select('id')
+            .select(`
+                *,
+                player_decisions (
+                    *,
+                    event_decision_options (*),
+                    agent_reactions (*)
+                )
+            `)
             .eq('user_id', userId)
-            .eq('event_type', eventType)
-            .gte('created_at', dateThreshold.toISOString())
-            .limit(1);
+            .gte('created_at', sevenDaysAgo.toISOString())
+            .order('created_at', { ascending: false });
 
         if (error) {
-            throw new Error(`Erro ao verificar cooldown: ${error.message}`);
+            throw new Error(`Erro ao buscar eventos recentes: ${error.message}`);
         }
 
-        return data.length === 0; // True se não há eventos recentes deste tipo
-    }
-
-    /**
-     * Expirar eventos antigos pendentes
-     * @returns {Promise<number>} - Número de eventos expirados
-     */
-    async expireOldEvents() {
-        const { data, error } = await supabase
-            .rpc('expire_old_events');
-
-        if (error) {
-            throw new Error(`Erro ao expirar eventos: ${error.message}`);
-        }
-
-        return data || 0;
+        return data.map(eventData => {
+            const event = new PoliticalEvent(eventData);
+            
+            if (eventData.player_decisions && eventData.player_decisions.length > 0) {
+                const decision = eventData.player_decisions[0];
+                event.player_decision = new PlayerDecision(decision);
+                
+                if (decision.event_decision_options) {
+                    event.player_decision.chosen_option = new EventDecisionOption(decision.event_decision_options);
+                }
+                
+                if (decision.agent_reactions) {
+                    event.player_decision.agent_reactions = decision.agent_reactions.map(reaction => 
+                        new AgentReaction(reaction)
+                    );
+                }
+            }
+            
+            return event;
+        });
     }
 }
 

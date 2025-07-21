@@ -1,53 +1,56 @@
-const CONSTRUCTION_CONSTANTS = {
-    // Status de construção
-    STATUS: {
-        PLANNING: 'planning',
-        BIDDING: 'bidding', 
-        IN_PROGRESS: 'in_progress',
-        COMPLETED: 'completed',
-        CANCELLED: 'cancelled'
-    },
+// Constantes para o sistema de construções
 
-    // Status de licitação
-    BIDDING_STATUS: {
-        OPEN: 'open',
-        CLOSED: 'closed',
-        CANCELLED: 'cancelled'
-    },
+const CONSTRUCTION_STATUS = {
+    PLANNING: 'planning',
+    BIDDING: 'bidding', 
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled'
+};
 
-    // Categorias de construção
-    CATEGORIES: {
-        HEALTH: 'saude',
-        EDUCATION: 'educacao',
-        INFRASTRUCTURE: 'infraestrutura',
-        SECURITY: 'seguranca',
-        SOCIAL: 'social'
-    },
+const BIDDING_STATUS = {
+    OPEN: 'open',
+    CLOSED: 'closed',
+    CANCELLED: 'cancelled'
+};
 
-    // Níveis de qualidade final
-    QUALITY_LEVELS: {
-        POOR: 'ruim',
-        REGULAR: 'regular', 
-        GOOD: 'boa',
-        EXCELLENT: 'excelente'
-    },
+const CONSTRUCTION_CATEGORIES = {
+    HEALTH: 'saude',
+    EDUCATION: 'educacao',
+    INFRASTRUCTURE: 'infraestrutura',
+    SECURITY: 'seguranca',
+    SOCIAL: 'social'
+};
 
-    // Configurações da job
-    JOB_SCHEDULE: process.env.CONSTRUCTION_JOB_SCHEDULE || '0 7 * * *', // Diariamente às 7h
-    JOB_TIMEZONE: process.env.CONSTRUCTION_JOB_TIMEZONE || 'America/Sao_Paulo',
+const QUALITY_LEVELS = {
+    POOR: 'ruim',
+    REGULAR: 'regular', 
+    GOOD: 'boa',
+    EXCELLENT: 'excelente'
+};
 
-    // Limites e configurações
+// Configurações da job
+const JOB_CONFIG = {
+    SCHEDULE: process.env.CONSTRUCTION_JOB_SCHEDULE || '0 7 * * *', // Diariamente às 7h
+    TIMEZONE: process.env.CONSTRUCTION_JOB_TIMEZONE || 'America/Sao_Paulo'
+};
+
+// Limites e configurações
+const SYSTEM_LIMITS = {
     MAX_CONCURRENT_CONSTRUCTIONS: 10, // Máximo de obras simultâneas
     MIN_COMPANIES_PER_BIDDING: 3,
-    MAX_COMPANIES_PER_BIDDING: 5,
-    
-    // Probabilidades de corrupção (usadas pela IA)
-    CORRUPTION_BASE_CHANCE: 0.30, // 30% chance base
-    CORRUPTION_DISCOVERY_CHANCE: 0.25, // 25% chance de descoberta
+    MAX_COMPANIES_PER_BIDDING: 5
+};
 
-    // Prompts para IA
-    AI_PROMPTS: {
-        GENERATE_COMPANIES: `Você é um especialista em licitações públicas. Gere {numCompanies} empresas FICTÍCIAS para uma licitação de construção de {constructionName} sempre responda em portugues.
+// Probabilidades de corrupção (usadas pela IA)
+const CORRUPTION_CONFIG = {
+    BASE_CHANCE: 0.30, // 30% chance base
+    DISCOVERY_CHANCE: 0.25 // 25% chance de descoberta
+};
+
+// Prompts para IA
+const AI_PROMPTS = {
+    GENERATE_COMPANIES: `Você é um especialista em licitações públicas. Gere {numCompanies} empresas FICTÍCIAS para uma licitação de construção de {constructionName} sempre responda em portugues.
 
 CONTEXTO DO ESTADO:
 - Estado: {stateName}
@@ -72,7 +75,7 @@ Gere empresas realistas com:
 
 Responda em JSON válido com array de empresas.`,
 
-        COMPLETION_NARRATIVE: `Você é um jornalista especializado em obras públicas. Crie uma narrativa realista sobre a conclusão de uma obra pública.
+    COMPLETION_NARRATIVE: `Você é um jornalista especializado em obras públicas. Crie uma narrativa realista sobre a conclusão de uma obra pública,sempre responda em portugues.
 
 DADOS DA OBRA:
 - Construção: {constructionName}
@@ -90,7 +93,35 @@ Crie uma narrativa de 2-3 parágrafos sobre:
 4. Impacto político (se relevante)
 
 Use tom jornalístico neutro e realista.`
-    }
+};
+
+// Exportação das constantes individuais
+const CONSTRUCTION_CONSTANTS = {
+    // Status
+    STATUS: CONSTRUCTION_STATUS,
+    BIDDING_STATUS,
+    
+    // Categorias
+    CATEGORIES: CONSTRUCTION_CATEGORIES,
+    
+    // Qualidade
+    QUALITY_LEVELS,
+    
+    // Configurações de Job
+    JOB_SCHEDULE: JOB_CONFIG.SCHEDULE,
+    JOB_TIMEZONE: JOB_CONFIG.TIMEZONE,
+    
+    // Limites
+    MAX_CONCURRENT_CONSTRUCTIONS: SYSTEM_LIMITS.MAX_CONCURRENT_CONSTRUCTIONS,
+    MIN_COMPANIES_PER_BIDDING: SYSTEM_LIMITS.MIN_COMPANIES_PER_BIDDING,
+    MAX_COMPANIES_PER_BIDDING: SYSTEM_LIMITS.MAX_COMPANIES_PER_BIDDING,
+    
+    // Corrupção
+    CORRUPTION_BASE_CHANCE: CORRUPTION_CONFIG.BASE_CHANCE,
+    CORRUPTION_DISCOVERY_CHANCE: CORRUPTION_CONFIG.DISCOVERY_CHANCE,
+    
+    // Prompts para IA
+    AI_PROMPTS
 };
 
 module.exports = CONSTRUCTION_CONSTANTS;
