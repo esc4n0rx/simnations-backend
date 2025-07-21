@@ -1,0 +1,513 @@
+{
+ "construction_system_api": {
+   "base_url": "/api/constructions",
+   "description": "Sistema de Construção de Estruturas Públicas - Todas as rotas requerem autenticação JWT",
+   "routes": [
+     {
+       "method": "GET",
+       "endpoint": "/api/constructions/available",
+       "description": "Listar todas as construções disponíveis (fixas no banco)",
+       "authentication": "Bearer JWT Token",
+       "query_parameters": {
+         "category": {
+           "type": "string",
+           "required": false,
+           "enum": ["saude", "educacao", "infraestrutura", "seguranca", "social"],
+           "description": "Filtrar por categoria"
+         },
+         "max_cost": {
+           "type": "number",
+           "required": false,
+           "description": "Custo máximo em milhões"
+         },
+         "min_gdp": {
+           "type": "number",
+           "required": false,
+           "description": "PIB mínimo necessário"
+         }
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "constructions": [
+             {
+               "id": "uuid",
+               "name": "Hospital Regional",
+               "description": "Hospital de grande porte com 200 leitos e centro cirúrgico avançado",
+               "category": "saude",
+               "base_cost": 150.00,
+               "monthly_maintenance": 8.50,
+               "construction_days": 720,
+               "economic_impact": 0.15,
+               "population_impact": 2.50,
+               "min_gdp": 5000.00,
+               "min_population": 500000,
+               "ai_context_tags": ["saúde", "hospitalar", "equipamentos médicos", "UTI", "centro cirúrgico"],
+               "specialization_required": "construção hospitalar",
+               "is_active": true,
+               "created_at": "2025-01-01T00:00:00Z"
+             }
+           ],
+           "total": 15,
+           "message": "Construções disponíveis listadas com sucesso"
+         }
+       }
+     },
+     {
+       "method": "GET",
+       "endpoint": "/api/constructions/check/{constructionTypeId}",
+       "description": "Verificar se o usuário pode iniciar uma construção específica",
+       "authentication": "Bearer JWT Token",
+       "path_parameters": {
+         "constructionTypeId": {
+           "type": "string",
+           "format": "uuid",
+           "required": true,
+           "description": "ID do tipo de construção"
+         }
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "canStart": true,
+           "construction": {
+             "id": "uuid",
+             "name": "UBS Comunitária",
+             "base_cost": 8.50,
+             "construction_days": 180
+           },
+           "stateData": {
+             "economy": {
+               "treasury_balance": 1500.00,
+               "gdp": 2500.00,
+               "population": 75000
+             }
+           }
+         }
+       },
+       "response_example_error": {
+         "success": true,
+         "data": {
+           "canStart": false,
+           "reason": "Saldo insuficiente. Necessário: R$ 150 milhões"
+         }
+       }
+     },
+     {
+       "method": "POST",
+       "endpoint": "/api/constructions/start",
+       "description": "Iniciar nova construção - debita valor e gera licitação via IA",
+       "authentication": "Bearer JWT Token",
+       "request_body": {
+         "construction_type_id": {
+           "type": "string",
+           "format": "uuid",
+           "required": true,
+           "description": "ID do tipo de construção a iniciar"
+         }
+       },
+       "request_example": {
+         "construction_type_id": "550e8400-e29b-41d4-a716-446655440000"
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "construction": {
+             "id": "uuid",
+             "user_id": "uuid",
+             "state_id": "uuid",
+             "construction_type_id": "uuid",
+             "status": "bidding",
+             "progress_percentage": 0.00,
+             "started_at": "2025-01-15T10:30:00Z",
+             "estimated_completion": "2025-07-15",
+             "final_cost": 8.50
+           },
+           "bidding": {
+             "id": "uuid",
+             "construction_id": "uuid",
+             "status": "open",
+             "generated_companies": [
+               {
+                 "id": 1,
+                 "name": "Construtora Saúde & Vida Ltda",
+                 "proposed_price": 8.20,
+                 "estimated_days": 175,
+                 "experience_level": "alta",
+                 "company_history": "Especializada em unidades de saúde há 15 anos",
+                 "corruption_offer": null,
+                 "quality_risk": "baixo",
+                 "reliability_score": 0.88
+               },
+               {
+                 "id": 2,
+                 "name": "Engenharia Comunitária do Estado",
+                 "proposed_price": 7.95,
+                 "estimated_days": 190,
+                 "experience_level": "média",
+                 "company_history": "Empresa em crescimento com foco em obras públicas",
+                 "corruption_offer": {
+                   "amount": 0.40,
+                   "description": "Agilização do licenciamento ambiental"
+                 },
+                 "quality_risk": "médio",
+                 "reliability_score": 0.75
+               }
+             ],
+             "ai_context": {
+               "stateName": "São Paulo",
+               "gdp": 2500.00,
+               "corruptionIndex": 35
+             },
+             "ai_response_time_ms": 1250
+           },
+           "message": "Construção iniciada e licitação gerada com sucesso"
+         }
+       }
+     },
+     {
+       "method": "PUT",
+       "endpoint": "/api/constructions/{constructionId}/select-winner",
+       "description": "Selecionar empresa vencedora da licitação",
+       "authentication": "Bearer JWT Token",
+       "path_parameters": {
+         "constructionId": {
+           "type": "string",
+           "format": "uuid",
+           "required": true,
+           "description": "ID da construção"
+         }
+       },
+       "request_body": {
+         "company_index": {
+           "type": "integer",
+           "required": true,
+           "minimum": 0,
+           "maximum": 10,
+           "description": "Índice da empresa selecionada no array"
+         },
+         "reason": {
+           "type": "string",
+           "required": true,
+           "minLength": 10,
+           "maxLength": 500,
+           "description": "Motivo da seleção"
+         }
+       },
+       "request_example": {
+         "company_index": 1,
+         "reason": "Melhor proposta técnica com prazo adequado e experiência comprovada no setor"
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "selected_company": {
+             "id": 2,
+             "name": "Engenharia Comunitária do Estado",
+             "proposed_price": 7.95,
+             "estimated_days": 190,
+             "corruption_offer": {
+               "amount": 0.40,
+               "description": "Agilização do licenciamento ambiental"
+             }
+           },
+           "has_corruption": true,
+           "corruption_amount": 0.40,
+           "new_estimated_completion": "2025-08-25T00:00:00Z",
+           "message": "Empresa selecionada e obra iniciada com sucesso"
+         }
+       }
+     },
+     {
+       "method": "GET",
+       "endpoint": "/api/constructions/my-constructions",
+       "description": "Listar todas as construções do usuário com progresso",
+       "authentication": "Bearer JWT Token",
+       "query_parameters": {
+         "status": {
+           "type": "string",
+           "required": false,
+           "enum": ["planning", "bidding", "in_progress", "completed", "cancelled"],
+           "description": "Filtrar por status"
+         }
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "constructions": [
+             {
+               "id": "uuid",
+               "user_id": "uuid",
+               "construction_types": {
+                 "name": "UBS Comunitária",
+                 "description": "Unidade Básica de Saúde para atendimento primário",
+                 "category": "saude"
+               },
+               "status": "in_progress",
+               "progress_percentage": 45.50,
+               "days_remaining": 95,
+               "is_delayed": false,
+               "delay_days": 0,
+               "started_at": "2025-01-15T10:30:00Z",
+               "estimated_completion": "2025-07-15",
+               "final_cost": 7.95,
+               "winning_company": {
+                 "name": "Engenharia Comunitária do Estado",
+                 "proposed_price": 7.95
+               },
+               "has_corruption": true,
+               "corruption_discovered": false,
+               "created_at": "2025-01-15T10:30:00Z"
+             }
+           ],
+           "total": 3,
+           "summary": {
+             "total": 3,
+             "by_status": {
+               "in_progress": 2,
+               "completed": 1
+             },
+             "by_category": {
+               "saude": 2,
+               "educacao": 1
+             },
+             "total_invested": 95.50,
+             "active_constructions": 2,
+             "completed_constructions": 1,
+             "average_progress": 52.75
+           }
+         }
+       }
+     },
+     {
+       "method": "GET",
+       "endpoint": "/api/constructions/{constructionId}",
+       "description": "Obter detalhes completos de uma construção específica",
+       "authentication": "Bearer JWT Token",
+       "path_parameters": {
+         "constructionId": {
+           "type": "string",
+           "format": "uuid",
+           "required": true,
+           "description": "ID da construção"
+         }
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "id": "uuid",
+           "construction_types": {
+             "name": "Hospital Regional",
+             "description": "Hospital de grande porte com 200 leitos e centro cirúrgico avançado",
+             "category": "saude",
+             "base_cost": 150.00,
+             "monthly_maintenance": 8.50,
+             "construction_days": 720,
+             "economic_impact": 0.15,
+             "population_impact": 2.50
+           },
+           "status": "in_progress",
+           "progress": {
+             "percentage": 65.25,
+             "daysRemaining": 250,
+             "isDelayed": false,
+             "delayDays": 0,
+             "totalDays": 720,
+             "elapsedDays": 470
+           },
+           "final_cost": 145.50,
+           "winning_company": {
+             "id": 1,
+             "name": "MedConstrutora Especializada",
+             "proposed_price": 145.50,
+             "estimated_days": 720,
+             "experience_level": "excelente"
+           },
+           "has_corruption": false,
+           "construction_biddings": [
+             {
+               "id": "uuid",
+               "status": "closed",
+               "generated_companies": [],
+               "selected_company_index": 0
+             }
+           ],
+           "can_cancel": false,
+           "corruption_risk": "baixo",
+           "estimated_impact": {
+             "economic": {
+               "monthly_gdp_impact": 0.15,
+               "monthly_maintenance_cost": 8.50
+             },
+             "social": {
+               "approval_impact": 2.50,
+               "territorial_usage": 1
+             }
+           }
+         }
+       }
+     },
+     {
+       "method": "PUT",
+       "endpoint": "/api/constructions/{constructionId}/cancel",
+       "description": "Cancelar construção (apenas se em status 'bidding')",
+       "authentication": "Bearer JWT Token",
+       "path_parameters": {
+         "constructionId": {
+           "type": "string",
+           "format": "uuid",
+           "required": true,
+           "description": "ID da construção"
+         }
+       },
+       "request_body": {
+         "reason": {
+           "type": "string",
+           "required": true,
+           "minLength": 10,
+           "maxLength": 500,
+           "description": "Motivo do cancelamento"
+         }
+       },
+       "request_example": {
+         "reason": "Mudança de prioridades orçamentárias devido a emergência estadual"
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "refunded_amount": 150.00,
+           "message": "Construção cancelada. R$ 150 milhões devolvidos ao tesouro."
+         }
+       }
+     },
+     {
+       "method": "GET",
+       "endpoint": "/api/constructions/history",
+       "description": "Obter histórico de construções completadas com narrativas da IA",
+       "authentication": "Bearer JWT Token",
+       "query_parameters": {
+         "page": {
+           "type": "integer",
+           "required": false,
+           "default": 1,
+           "description": "Página da paginação"
+         },
+         "limit": {
+           "type": "integer",
+           "required": false,
+           "default": 10,
+           "maximum": 50,
+           "description": "Itens por página"
+         }
+       },
+       "response_example": {
+         "success": true,
+         "data": {
+           "history": [
+             {
+               "id": "uuid",
+               "construction_name": "Centro de Educação Infantil",
+               "category": "educacao",
+               "total_cost": 24.80,
+               "actual_days": 275,
+               "planned_days": 270,
+               "executor_company": {
+                 "name": "Obras Escolares Integradas S.A.",
+                 "experience_level": "alta"
+               },
+               "completion_narrative": "O Centro de Educação Infantil foi entregue com pequeno atraso de 5 dias, mas dentro dos padrões de qualidade esperados. A Obras Escolares Integradas S.A. superou as expectativas na execução dos playgrounds e áreas de recreação. A população local recebeu a obra com grande entusiasmo, especialmente os pais que aguardavam por mais vagas na educação infantil.",
+               "had_corruption": false,
+               "corruption_discovered": false,
+               "final_quality": "boa",
+               "quality_narrative": "Construção finalizada dentro dos padrões técnicos esperados, porém com atraso na entrega",
+               "economic_impact_applied": 0.06,
+               "governance_impact_applied": 1.50,
+               "completed_at": "2025-01-10T14:30:00Z"
+             }
+           ],
+           "pagination": {
+             "page": 1,
+             "limit": 10,
+             "total": 5,
+             "total_pages": 1
+           }
+         }
+       }
+     },
+     {
+       "method": "POST",
+       "endpoint": "/api/constructions/admin/force-update",
+       "description": "Forçar execução manual da job de construções (Admin)",
+       "authentication": "Bearer JWT Token",
+       "request_body": {},
+       "response_example": {
+         "success": true,
+         "data": {
+           "message": "Atualização de construções executada com sucesso"
+         }
+       }
+     }
+   ],
+   "error_responses": {
+     "400": {
+       "description": "Bad Request - Dados inválidos ou requisitos não atendidos",
+       "example": {
+         "success": false,
+         "error": "Saldo insuficiente. Necessário: R$ 150 milhões"
+       }
+     },
+     "401": {
+       "description": "Unauthorized - Token JWT inválido ou ausente",
+       "example": {
+         "success": false,
+         "error": "Token de acesso inválido"
+       }
+     },
+     "404": {
+       "description": "Not Found - Recurso não encontrado",
+       "example": {
+         "success": false,
+         "error": "Construção não encontrada"
+       }
+     },
+     "422": {
+       "description": "Unprocessable Entity - Erro de validação",
+       "example": {
+         "success": false,
+         "error": "Dados de entrada inválidos",
+         "details": [
+           {
+             "field": "construction_type_id",
+             "message": "ID do tipo de construção deve ser um UUID válido"
+           }
+         ]
+       }
+     },
+     "500": {
+       "description": "Internal Server Error - Erro interno do servidor",
+       "example": {
+         "success": false,
+         "error": "Erro interno do servidor"
+       }
+     }
+   },
+   "authentication": {
+     "type": "Bearer JWT",
+     "header": "Authorization: Bearer {token}",
+     "description": "Todas as rotas requerem autenticação JWT válida"
+   },
+   "key_features": [
+     "Construções fixas no banco de dados com dados pré-definidos",
+     "Empresas licitantes geradas dinamicamente pela IA (Groq)",
+     "Sistema de corrupção com propinas opcionais",
+     "Descoberta de corrupção com impactos na governança",
+     "Progresso automático baseado em tempo via job agendada",
+     "Narrativas de conclusão geradas pela IA",
+     "Histórico completo com análise de qualidade",
+     "Impactos econômicos e sociais aplicados automaticamente",
+     "Sistema de cancelamento para licitações em andamento",
+     "Validação de requisitos (PIB, população, saldo)",
+     "Job automática diária para atualização de progresso"
+   ]
+ }
+}

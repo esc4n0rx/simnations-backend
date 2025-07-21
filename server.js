@@ -12,6 +12,8 @@ const authRoutes = require('./src/presentation/routes/auth-routes');
 const userRoutes = require('./src/presentation/routes/user-routes');
 const quizRoutes = require('./src/presentation/routes/quiz-routes');
 const stateRoutes = require('./src/presentation/routes/state-routes');
+const constructionRoutes = require('./src/presentation/routes/construction-routes');
+const ConstructionJob = require('./src/infrastructure/jobs/construction-job');
 const politicalEventRoutes = require('./src/presentation/routes/political-event-routes');
 const governmentProjectRoutes = require('./src/presentation/routes/government-project-routes');
 
@@ -28,6 +30,7 @@ const PORT = process.env.PORT || 3000;
 // Instâncias das jobs
 let economicJob = null;
 let projectExecutionService = null;
+let constructionJob;
 
 // CONFIGURAÇÃO CRÍTICA: Trust proxy para resolver erro de rate limiting
 // Necessário quando a aplicação está atrás de proxy/load balancer
@@ -138,6 +141,7 @@ app.use('/api/quiz', quizRoutes);
 app.use('/api/state', stateRoutes);
 app.use('/api/political-events', politicalEventRoutes);
 app.use('/api/government-projects', governmentProjectRoutes);
+app.use('/api/constructions', constructionRoutes);
 
 // Middleware de tratamento de erros (deve ser o último)
 app.use(errorMiddleware);
@@ -156,6 +160,10 @@ async function initializeJobs() {
         projectExecutionService = new ProjectExecutionService();
         await projectExecutionService.start();
         console.log('🎯 Job de Projetos: Ativa');
+
+        constructionJob = new ConstructionJob();
+        constructionJob.start();
+        console.log('🏗️ Job de Construções: Ativa');
         
     } catch (error) {
         console.error('❌ Erro ao inicializar jobs:', error.message);
@@ -175,6 +183,10 @@ async function gracefulShutdown() {
         if (projectExecutionService) {
             await projectExecutionService.stop();
             console.log('🎯 Job de Projetos: Parada');
+        }
+        if (constructionJob) {
+            constructionJob.stop();
+            console.log('🏗️ Job de Construções: Parada');
         }
         
         console.log('✅ Graceful shutdown concluído');
