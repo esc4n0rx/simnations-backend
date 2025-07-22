@@ -3,6 +3,7 @@ const { supabase } = require('../../infrastructure/database/supabase-client');
 class ProjectExecutionRepository {
     constructor() {
         // Usar Supabase ao invés de Sequelize
+        this.supabase = supabase;
     }
 
     /**

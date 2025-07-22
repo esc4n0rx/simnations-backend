@@ -15,41 +15,32 @@ class ProjectExecutionService {
      * Processar execuções pendentes
      * @returns {Promise<Object>} - Resultado da execução
      */
-    async processPendingExecutions() {
+    async getPendingExecutions(limit = 50) {
         try {
-            console.log('🔄 Iniciando processamento de execuções pendentes...');
+            const { data: executions, error } = await this.executionRepository.supabase
+                .from('project_executions')
+                .select(`
+                    *,
+                    government_projects!inner(
+                        id,
+                        user_id,
+                        state_id,
+                        status
+                    )
+                `)
+                .eq('status', 'pending')
+                .lte('scheduled_for', new Date().toISOString())
+                .order('scheduled_for', { ascending: true })
+                .limit(limit);
 
-            const pendingExecutions = await this.getPendingExecutions();
-            
-            if (pendingExecutions.length === 0) {
-                console.log('ℹ️ Nenhuma execução pendente encontrada');
-                return { processed: 0, errors: 0 };
+            if (error) {
+                throw new Error(`Erro ao buscar execuções pendentes: ${error.message}`);
             }
 
-            console.log(`📋 ${pendingExecutions.length} execuções pendentes encontradas`);
-
-            let processed = 0;
-            let errors = 0;
-
-            for (const execution of pendingExecutions) {
-                try {
-                    await this.processExecution(execution);
-                    await this.markExecutionAsExecuted(execution.id);
-                    processed++;
-                } catch (error) {
-                    console.error(`❌ Erro ao processar execução ${execution.id}:`, error);
-                    await this.markExecutionAsFailed(execution.id, error.message);
-                    errors++;
-                }
-            }
-
-            console.log(`✅ Processamento concluído: ${processed} sucessos, ${errors} erros`);
-
-            return { processed, errors };
-
+            return executions || [];
         } catch (error) {
-            console.error('❌ Erro no processamento de execuções:', error);
-            throw error;
+            console.error('❌ Erro ao buscar execuções pendentes:', error);
+            return [];
         }
     }
 
